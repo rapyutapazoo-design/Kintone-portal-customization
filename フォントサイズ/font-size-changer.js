@@ -180,12 +180,15 @@
         // 通知カード・スペース一覧・アプリ一覧を巻き込まないよう、広い親要素ではなく
         // 「読む本文」系のコンテナ／要素だけを対象にします。
         var targetAreas = [
-            '.ocean-portal-announcement-body',   // ポータルのお知らせ本文
-            '.ocean-space-thread-body',          // スレッド本文
-            '.ocean-space-spacebody',            // スペーストップの本文ウィジェット
-            '.ocean-ui-comments-view',           // コメントエリア
-            '.goog-window-body',                 // ポップアップウィンドウ（ルックアップ等）
-            '.gaia-mobile-v2-view-panel-content' // モバイル版のビューパネル
+            '.ocean-portal-announcement-body',           // ポータルのお知らせ本文（PC）
+            '.ocean-space-thread-body',                  // スレッド本文（PC）
+            '.ocean-space-spacebody',                    // スペーストップの本文ウィジェット（PC）
+            '.ocean-ui-comments-view',                   // コメントエリア
+            '.goog-window-body',                         // ポップアップウィンドウ（ルックアップ等）
+            '.gaia-mobile-v2-view-panel-content',        // モバイル版のビューパネル
+            '.gaia-mobile-v2-portal-announcementcontents', // ポータルのお知らせ本文（モバイル）
+            '.gaia-mobile-v2-space-thread-threadbody',     // スレッド本文（モバイル）
+            '.gaia-mobile-v2-space-spacebody'              // スペーストップの本文ウィジェット（モバイル）
         ];
         var baseSelector = targetAreas.join(', ');
 
