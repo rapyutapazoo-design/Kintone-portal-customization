@@ -27,7 +27,7 @@
 
     var SIZES = [
         { label: '小', value: '14px' },
-        { label: '中', value: '18px' },
+        { label: '中', value: '20px' },
         { label: '大', value: '24px' }
     ];
 
