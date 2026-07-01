@@ -51,6 +51,14 @@
     var initSize = localStorage.getItem(STORAGE_KEY_SIZE) || '14px';
     applyGlobalFontSize(initSize);
 
+    // ウィジェットの無条件マウント。
+    // Kintoneはモバイルの「スレッド個別表示」等に対応するJSカスタマイズイベントを提供して
+    // いないため、kintone.events.on(FONT_UI_EVENTS, ...) だけではその画面でウィジェットが
+    // 一度もマウントされない。setupFontWidget() は重複防止ガードを持つため、スクリプト読み込み時
+    // に無条件で呼んでも他画面での二重生成は起きず、どの画面でも確実にウィジェットを表示できる。
+    ensureWidgetStyle();
+    setupFontWidget();
+
     // --- ウィジェット見た目用CSSの注入（1度のみ） ---
     function ensureWidgetStyle() {
         if (document.getElementById(WIDGET_STYLE_ID)) return;
