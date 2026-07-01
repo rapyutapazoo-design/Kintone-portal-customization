@@ -1,10 +1,12 @@
 /**
  * font-size-changer.js
- * Kintone のフォントサイズ変更機能（フローティングUI 一本化版）。
+ * Kintone のフォントサイズ変更機能（格納式セグメントUI）。
  *
  * 【設計方針】
- *   - 画面右下に常駐するフローティングUI（"Aa" ピル型）で、文字サイズを「小・中・大」から選択する。
- *   - ポータルを含む全画面で同一のUI・操作を提供する（ポータル上部のインラインボタンは持たない）。
+ *   - 画面右下に常駐するウィジェット。格納時は「文字」ボタン、クリックで小中大セグメントが展開する。
+ *     展開時のレイアウトは [小 中 大]（px併記・スライドインジケータ）＋ 右に「文字」ボタン。
+ *   - ポータルを含む全画面で同一のUI・操作を提供する。
+ *   - 開閉状態は localStorage に保存（既定は格納）。スタイルは <style> 注入（重複防止ID付き）。
  *   - ショートカット機能（portal-shortcut.js）や共有コーディネーター window.PortalCustomize には
  *     一切依存しない、完全に自己完結したファイル。
  *
@@ -17,10 +19,18 @@
 
     // --- 共通定数 ---
     var STORAGE_KEY_SIZE = 'kintone-custom-font-size';
-    var STORAGE_KEY_MINIMIZED = 'kintone-font-ui-minimized';
-    var STYLE_ID = 'kintone-custom-font-style';
+    var STORAGE_KEY_COLLAPSED = 'kintone-font-ui-collapsed';
+    var STYLE_ID = 'kintone-custom-font-style';      // 本文サイズ用CSS（Allowlist注入）
+    var WIDGET_STYLE_ID = 'kintone-font-ui-style';   // ウィジェット見た目用CSS
+    var WIDGET_ID = 'kintone-font-ui';
 
-    // フローティングUIを表示する画面（ポータルを含む全画面）
+    var SIZES = [
+        { label: '小', value: '14px' },
+        { label: '中', value: '18px' },
+        { label: '大', value: '24px' }
+    ];
+
+    // ウィジェットUIを表示する画面（ポータルを含む全画面）
     var FONT_UI_EVENTS = [
         'portal.show', 'mobile.portal.show',
         'app.record.index.show', 'mobile.app.record.index.show',
@@ -31,7 +41,8 @@
 
     // --- メイン処理 ---
     kintone.events.on(FONT_UI_EVENTS, function (event) {
-        setupFloatingUI(event);
+        ensureWidgetStyle();
+        setupFontWidget();
         return event;
     });
 
@@ -39,114 +50,103 @@
     var initSize = localStorage.getItem(STORAGE_KEY_SIZE) || '14px';
     applyGlobalFontSize(initSize);
 
-    // --- フローティングUI ---
-    function setupFloatingUI(event) {
-        var containerId = 'kintone-global-font-size-changer';
-        if (document.getElementById(containerId)) return;
-        var isMobile = (event.type.indexOf('mobile') !== -1);
-        var container = document.createElement('div');
-        container.id = containerId;
-        // 固定配置
-        Object.assign(container.style, {
-            position: 'fixed',
-            bottom: isMobile ? '15px' : '20px',
-            right: isMobile ? '15px' : '20px',
-            zIndex: '10000',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: 'rgba(255, 255, 255, 0.9)',
-            backdropFilter: 'blur(8px)',
-            borderRadius: '9999px',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-            border: '1px solid rgba(0, 0, 0, 0.05)',
-        });
-        // ボタンラッパー
-        var contentWrapper = document.createElement('div');
-        Object.assign(contentWrapper.style, {
-            display: 'flex',
-            alignItems: 'center',
-            padding: '2px',
-            transition: 'width 0.2s ease, opacity 0.2s ease',
-            overflow: 'hidden',
-            height: '32px'
-        });
-        var isMinimized = localStorage.getItem(STORAGE_KEY_MINIMIZED) === 'true';
-        // トグルボタン
-        var toggleBtn = document.createElement('button');
-        Object.assign(toggleBtn.style, {
-            border: 'none',
-            background: 'transparent',
-            cursor: 'pointer',
-            padding: '0',
-            width: '36px', height: '36px',
-            borderRadius: '50%',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '16px', color: '#555', outline: 'none'
-        });
-        toggleBtn.innerHTML = '<span style="font-weight:bold; font-family:serif;">Aa</span>';
-        function updateState() {
-            if (isMinimized) {
-                contentWrapper.style.opacity = '0';
-                contentWrapper.style.width = '0px';
-                toggleBtn.style.color = '#555';
-                toggleBtn.style.backgroundColor = 'transparent';
-            } else {
-                contentWrapper.style.opacity = '1';
-                contentWrapper.style.width = '120px';
-                toggleBtn.style.color = '#3498db';
-                toggleBtn.style.backgroundColor = 'rgba(52, 152, 219, 0.1)';
-            }
+    // --- ウィジェット見た目用CSSの注入（1度のみ） ---
+    function ensureWidgetStyle() {
+        if (document.getElementById(WIDGET_STYLE_ID)) return;
+        var st = document.createElement('style');
+        st.id = WIDGET_STYLE_ID;
+        st.textContent = [
+            '#' + WIDGET_ID + '.cseg{position:fixed;right:22px;bottom:22px;z-index:10000;display:flex;align-items:center;gap:0;background:#fff;border:1px solid #e2e8f0;border-radius:9999px;box-shadow:0 6px 20px rgba(21,66,96,.18);padding:6px;transition:gap .25s ease;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Sans","Noto Sans JP",Roboto,sans-serif;}',
+            '#' + WIDGET_ID + '.cseg.expanded{gap:8px;}',
+            '#' + WIDGET_ID + ' .kfui-body{display:flex;align-items:center;overflow:hidden;transition:width .25s ease,opacity .15s ease;}',
+            '#' + WIDGET_ID + '.cseg.collapsed .kfui-body{width:0;opacity:0;}',
+            '#' + WIDGET_ID + '.cseg.expanded .kfui-body{width:162px;opacity:1;}',
+            '#' + WIDGET_ID + ' .kfui-track{position:relative;display:flex;background:#f0f3f6;border-radius:9999px;padding:3px;}',
+            '#' + WIDGET_ID + ' .kfui-ind{position:absolute;top:3px;bottom:3px;width:52px;border-radius:9999px;background:linear-gradient(135deg,#2b7bc0,#154260);box-shadow:0 2px 6px rgba(21,66,96,.35);transition:transform .25s ease;}',
+            '#' + WIDGET_ID + ' .kfui-sz{position:relative;z-index:1;width:52px;border:none;background:transparent;cursor:pointer;padding:6px 0;display:flex;flex-direction:column;align-items:center;line-height:1.1;font-weight:700;color:#555;transition:color .15s ease;}',
+            '#' + WIDGET_ID + ' .kfui-sz .kfui-big{font-size:14px;}',
+            '#' + WIDGET_ID + ' .kfui-sz .kfui-px{font-size:9px;opacity:.7;margin-top:2px;}',
+            '#' + WIDGET_ID + ' .kfui-sz.active{color:#fff;}',
+            '#' + WIDGET_ID + ' .kfui-sz:focus-visible{outline:2px solid #3498db;outline-offset:2px;border-radius:8px;}',
+            '#' + WIDGET_ID + ' .kfui-trigger{border:none;cursor:pointer;border-radius:9999px;padding:9px 16px;background:linear-gradient(135deg,#2b7bc0,#154260);color:#fff;font-weight:700;font-size:14px;white-space:nowrap;box-shadow:0 2px 8px rgba(21,66,96,.35);transition:filter .15s ease;}',
+            '#' + WIDGET_ID + ' .kfui-trigger:hover{filter:brightness(1.08);}',
+            '#' + WIDGET_ID + ' .kfui-trigger:focus-visible{outline:2px solid #3498db;outline-offset:2px;}'
+        ].join('\n');
+        document.head.appendChild(st);
+    }
+
+    // --- ウィジェット本体の生成 ---
+    function setupFontWidget() {
+        if (document.getElementById(WIDGET_ID)) return;
+
+        var collapsed = localStorage.getItem(STORAGE_KEY_COLLAPSED) !== 'false'; // 既定は格納
+        var currentSize = localStorage.getItem(STORAGE_KEY_SIZE) || '14px';
+
+        var cseg = document.createElement('div');
+        cseg.id = WIDGET_ID;
+        cseg.className = 'cseg ' + (collapsed ? 'collapsed' : 'expanded');
+
+        // 展開部（小中大セグメント）
+        var body = document.createElement('div');
+        body.className = 'kfui-body';
+        var track = document.createElement('div');
+        track.className = 'kfui-track';
+        var ind = document.createElement('div');
+        ind.className = 'kfui-ind';
+        track.appendChild(ind);
+
+        var szButtons = [];
+        function updateActive(active) {
+            var idx = 0;
+            SIZES.forEach(function (s, i) { if (s.value === active) idx = i; });
+            ind.style.transform = 'translateX(' + (idx * 52) + 'px)';
+            szButtons.forEach(function (b, i) { b.classList.toggle('active', i === idx); });
         }
-        toggleBtn.onclick = function (e) {
-            e.preventDefault();
-            isMinimized = !isMinimized;
-            localStorage.setItem(STORAGE_KEY_MINIMIZED, isMinimized);
-            updateState();
-        };
-        // サイズ選択ボタン生成
-        var sizes = [
-            { label: '小', value: '14px' },
-            { label: '中', value: '18px' },
-            { label: '大', value: '24px' }
-        ];
-        sizes.forEach(function (size) {
-            var btn = document.createElement('button');
-            btn.textContent = size.label;
-            Object.assign(btn.style, {
-                border: 'none', background: 'transparent', cursor: 'pointer',
-                padding: '0 8px', height: '28px', borderRadius: '9999px',
-                fontSize: '13px', fontWeight: '600', color: '#555',
-                transition: 'all 0.2s ease', outline: 'none', margin: '0 1px',
-                whiteSpace: 'nowrap'
-            });
-            btn._updateActive = function (curr) {
-                if (size.value === curr) {
-                    btn.style.backgroundColor = '#3498db';
-                    btn.style.color = '#fff';
-                } else {
-                    btn.style.backgroundColor = 'transparent';
-                    btn.style.color = '#555';
-                }
+
+        SIZES.forEach(function (s) {
+            var b = document.createElement('button');
+            b.className = 'kfui-sz';
+            b.innerHTML = '<span class="kfui-big">' + s.label + '</span>' +
+                          '<span class="kfui-px">' + parseInt(s.value, 10) + 'px</span>';
+            b.setAttribute('aria-label', s.label + ' ' + s.value);
+            b.onclick = function () {
+                currentSize = s.value;
+                localStorage.setItem(STORAGE_KEY_SIZE, currentSize);
+                applyGlobalFontSize(currentSize);
+                updateActive(currentSize);
+                document.dispatchEvent(new CustomEvent('kintone-font-size-changed', { detail: currentSize }));
             };
-            btn._updateActive(initSize);
-            document.addEventListener('kintone-font-size-changed', function (e) {
-                btn._updateActive(e.detail);
-            });
-            btn.onclick = function (e) {
-                e.preventDefault();
-                localStorage.setItem(STORAGE_KEY_SIZE, size.value);
-                applyGlobalFontSize(size.value);
-                var ev = new CustomEvent('kintone-font-size-changed', { detail: size.value });
-                document.dispatchEvent(ev);
-            };
-            contentWrapper.appendChild(btn);
+            track.appendChild(b);
+            szButtons.push(b);
         });
-        container.appendChild(contentWrapper);
-        container.appendChild(toggleBtn);
-        document.body.appendChild(container);
-        updateState();
+        body.appendChild(track);
+
+        // トリガー（「文字」ボタン・小中大の右に配置）
+        var trigger = document.createElement('button');
+        trigger.className = 'kfui-trigger';
+        trigger.textContent = '文字';
+        trigger.setAttribute('aria-expanded', String(!collapsed));
+        trigger.setAttribute('aria-label', collapsed ? '文字サイズ設定を開く' : '文字サイズ設定を閉じる');
+        trigger.onclick = function () {
+            var willCollapse = cseg.classList.contains('expanded');
+            cseg.classList.toggle('collapsed', willCollapse);
+            cseg.classList.toggle('expanded', !willCollapse);
+            localStorage.setItem(STORAGE_KEY_COLLAPSED, String(willCollapse));
+            trigger.setAttribute('aria-expanded', String(!willCollapse));
+            trigger.setAttribute('aria-label', willCollapse ? '文字サイズ設定を開く' : '文字サイズ設定を閉じる');
+        };
+
+        cseg.appendChild(body);
+        cseg.appendChild(trigger);
+        document.body.appendChild(cseg);
+
+        updateActive(currentSize);
+
+        // 他のUI／画面での変更を同期
+        document.addEventListener('kintone-font-size-changed', function (e) {
+            currentSize = e.detail;
+            updateActive(currentSize);
+        });
     }
 
     // --- スタイル注入 (Allowlist) ---
