@@ -150,12 +150,11 @@
     }
 
     // --- スタイル注入 (Allowlist) ---
+    // 小(14px)も含め常に注入する。リッチテキストは要素自身に font-size（例: large≒18px）を
+    // 持つため、14px時に注入を外すと「小」がインライン値に戻り、「中(18px)」と同じ見た目になる。
+    // 3段階（小/中/大）を明確に区別するため、14px でもCSSを当てて確実に上書きする。
     function applyGlobalFontSize(size) {
         var styleEl = document.getElementById(STYLE_ID);
-        if (size === '14px') {
-            if (styleEl) styleEl.parentNode.removeChild(styleEl);
-            return;
-        }
         if (!styleEl) {
             styleEl = document.createElement('style');
             styleEl.id = STYLE_ID;
