@@ -173,7 +173,8 @@
         // 「読む本文」系のコンテナ／要素だけを対象にします。
         var targetAreas = [
             '.ocean-portal-announcement-body',   // ポータルのお知らせ本文
-            '.ocean-space-body',                 // スペース／スレッド本文
+            '.ocean-space-thread-body',          // スレッド本文
+            '.ocean-space-spacebody',            // スペーストップの本文ウィジェット
             '.ocean-ui-comments-view',           // コメントエリア
             '.goog-window-body',                 // ポップアップウィンドウ（ルックアップ等）
             '.gaia-mobile-v2-view-panel-content' // モバイル版のビューパネル
