@@ -5,14 +5,15 @@
  * 【設計方針】
  *   - 画面右下に常駐するウィジェット。格納時は「文字」ボタン、クリックで小中大セグメントが展開する。
  *     展開時のレイアウトは [小 中 大]（px併記・スライドインジケータ）＋ 右に「文字」ボタン。
- *   - ポータルを含む全画面で同一のUI・操作を提供する。
+ *   - 対象画面で同一のUI・操作を提供する。
  *   - 開閉状態は localStorage に保存（既定は格納）。スタイルは <style> 注入（重複防止ID付き）。
  *   - ショートカット機能（portal-shortcut.js）や共有コーディネーター window.PortalCustomize には
  *     一切依存しない、完全に自己完結したファイル。
  *
  * 【対象テキスト（Allowlist方式）】
- *   システムUI（ヘッダー・サイドバー等）の表示崩れを防ぐため、お知らせ・レコード値・コメント等の
- *   「読むテキスト」エリアのみを対象に CSS を注入する（generateCustomCss 参照）。
+ *   システムUI（ヘッダー・サイドバー等）や、通知カード・スペース一覧・アプリ一覧の標準レイアウトを
+ *   崩さないため、お知らせ本文・スレッド本文・レコード値・コメント等の「読むテキスト」エリアのみを
+ *   対象に CSS を注入する（generateCustomCss 参照）。
  */
 (function () {
     "use strict";
@@ -151,7 +152,7 @@
 
     // --- スタイル注入 (Allowlist) ---
     // 小(14px) は「デフォルト（無適用）」とし、CSSを一切注入しない（既存の注入があれば削除）。
-    // 中(18px)・大(24px) のみ拡大CSS＋レイアウト正規化を注入する。
+    // 中(18px)・大(24px) のみ拡大CSSを注入する。
     function applyGlobalFontSize(size) {
         var styleEl = document.getElementById(STYLE_ID);
         if (size === '14px') {
@@ -167,44 +168,53 @@
     }
 
     function generateCustomCss(size) {
-        // [Block 1] 対象エリアの定義 (Allowlist)
-        // システムUI（ヘッダー、サイドバー等）を除外し、メインコンテンツのみを対象にします。
+        // [Block 1] 対象の定義 (Allowlist)
+        // 通知カード・スペース一覧・アプリ一覧を巻き込まないよう、広い親要素ではなく
+        // 「読む本文」系のコンテナ／要素だけを対象にします。
         var targetAreas = [
-            '.ocean-portal-body',           // ポータル画面の本文エリア
-            '.gaia-argoui-app-view',        // アプリ一覧・詳細画面のメインエリア
-            '.ocean-space-body',            // スペース画面の本文
-            '.ocean-ui-comments-view',      // コメントエリア
-            '.goog-window-body',            // ポップアップウィンドウ（ルックアップ等）
+            '.ocean-portal-announcement-body',   // ポータルのお知らせ本文
+            '.ocean-space-body',                 // スペース／スレッド本文
+            '.ocean-ui-comments-view',           // コメントエリア
+            '.goog-window-body',                 // ポップアップウィンドウ（ルックアップ等）
             '.gaia-mobile-v2-view-panel-content' // モバイル版のビューパネル
         ];
         var baseSelector = targetAreas.join(', ');
 
+        // レコード系はアプリ画面全体を巻き込まないよう、値・ラベル・セルをピンポイント指定します。
+        var directTextSelectors = [
+            '.control-value-gaia',   // レコード値
+            '.control-label-gaia',   // レコード項目ラベル
+            '.subtable-row-gaia td', // サブテーブル内の値
+            '.subtable-row-gaia th',
+            '.recordlist-cell-gaia'  // レコード一覧セル
+        ];
+        var directTextSelector = directTextSelectors.join(', ');
+
+        // Block 5・6 で使う「対象スコープ」（コンテナ＋レコード系）
+        var textScopes = targetAreas.concat(directTextSelectors);
+
         // [Block 2] メインテキストのスタイル
-        // 指定エリア内の基本的なフォントサイズを設定します。
         var mainTextBlock = `
-            ${baseSelector} {
+            ${baseSelector},
+            ${directTextSelector} {
                 font-size: ${size} !important;
                 line-height: 1.5 !important;
             }
         `;
 
         // [Block 3] フォーム要素のスタイル
-        // 入力フィールドなどは個別にセレクタを指定して適用します。
-        // targetAreas内の input, textarea, select を対象にします。
+        // 対象コンテナ内の input, textarea, select を対象にします。
         var formSelectors = targetAreas.map(function (s) { return s + ' input'; }).join(', ') + ', ' +
             targetAreas.map(function (s) { return s + ' textarea'; }).join(', ') + ', ' +
             targetAreas.map(function (s) { return s + ' select'; }).join(', ');
 
         var formControlBlock = `
-            ${formSelectors},
-            .control-value-gaia,
-            .control-label-gaia {
+            ${formSelectors} {
                 font-size: ${size} !important;
             }
         `;
 
         // [Block 4] ボタンのスタイル
-        // ボタンはサイズ変更に伴いパディングや高さの自動調整も行います。
         // アイコンボタン (.kintoneplugin-button-icon) は除外します。
         var buttonSelectors = targetAreas.map(function (s) { return s + ' button:not(.kintoneplugin-button-icon)'; }).join(', ');
 
@@ -218,11 +228,11 @@
 
         // [Block 5] リッチテキスト等のインライン font-size の上書き
         // お知らせ・スレッド本文などは各要素（span 等）に font-size がインライン指定されており、
-        // コンテナへの継承だけでは効きません。対象エリア配下のテキスト要素を直接 !important で
+        // コンテナへの継承だけでは効きません。対象スコープ配下のテキスト要素を直接 !important で
         // 上書きすることで、インライン指定（例: font-size: large）を上書きします。
         var textTags = ['span', 'p', 'li', 'a', 'strong', 'em', 'b', 'u', 'td', 'th', 'dd', 'dt', 'blockquote', 'label'];
         var textSelectors = [];
-        targetAreas.forEach(function (area) {
+        textScopes.forEach(function (area) {
             textTags.forEach(function (t) { textSelectors.push(area + ' ' + t); });
         });
         var textDescendantBlock = `
@@ -233,10 +243,10 @@
 
         // [Block 6] 例外・調整用スタイル
         // アイコンフォントやバッジなど、継承で崩れるものを補正します。
-        // 対象エリア内のアイコンは Block 5 より詳細度を高くして継承に戻し、巻き込みを防ぎます。
+        // 対象スコープ内のアイコンは Block 5 より詳細度を高くして継承に戻し、巻き込みを防ぎます。
         var iconClasses = ['.fa', '.fas', '.far', '.fab', '.gaia-icon', '.kintoneplugin-button-icon'];
         var iconSelectors = [];
-        targetAreas.forEach(function (area) {
+        textScopes.forEach(function (area) {
             iconClasses.forEach(function (c) { iconSelectors.push(area + ' ' + c); });
         });
         var exceptionBlock = `
@@ -245,38 +255,7 @@
             .tab-icon-num-gaia { font-size: 0.8em !important; }
         `;
 
-        // [Block 7] レイアウト正規化（崩れ防止）
-        // 固定レイアウトのウィジェット（通知・スペース/アプリ一覧）は、文字拡大に器が追従できず
-        // 重なり・はみ出しが起きる。項目コンテナの固定高さを解除し、行高・折り返しを追従させる。
-        // ※スクロール親（.ocean-portal-ntflist-items 等）には overflow を当てない。
-        var normalizeBlock = `
-            .ocean-ntf-ntfitem,
-            .ocean-ntf-ntfitem-grid,
-            .ocean-ntf-ntfitem-content,
-            .ocean-ntf-ntfitem-body,
-            .ocean-ntf-ntfitem-detail {
-                height: auto !important;
-                min-height: 0 !important;
-                max-height: none !important;
-                overflow: visible !important;
-                line-height: 1.4 !important;
-            }
-            .ocean-ntf-ntfitem-grid { grid-template-rows: auto !important; }
-            .gaia-argoui-spacescrollinglist-item,
-            .gaia-argoui-appscrollinglist-item {
-                height: auto !important;
-                min-height: 0 !important;
-            }
-            .gaia-argoui-spacescrollinglist-name,
-            .gaia-argoui-appscrollinglist-name {
-                white-space: normal !important;
-                text-overflow: clip !important;
-                overflow: visible !important;
-                line-height: 1.4 !important;
-            }
-        `;
-
         // 全ブロックを結合して返します
-        return mainTextBlock + formControlBlock + buttonBlock + textDescendantBlock + normalizeBlock + exceptionBlock;
+        return mainTextBlock + formControlBlock + buttonBlock + textDescendantBlock + exceptionBlock;
     }
 })();
