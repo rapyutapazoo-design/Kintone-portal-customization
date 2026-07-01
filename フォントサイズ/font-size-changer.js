@@ -214,14 +214,36 @@
             }
         `;
 
-        // [Block 5] 例外・調整用スタイル
+        // [Block 5] リッチテキスト等のインライン font-size の上書き
+        // お知らせ・スレッド本文などは各要素（span 等）に font-size がインライン指定されており、
+        // コンテナへの継承だけでは効きません。対象エリア配下のテキスト要素を直接 !important で
+        // 上書きすることで、インライン指定（例: font-size: large）を上書きします。
+        var textTags = ['span', 'p', 'li', 'a', 'strong', 'em', 'b', 'u', 'td', 'th', 'dd', 'dt', 'blockquote', 'label'];
+        var textSelectors = [];
+        targetAreas.forEach(function (area) {
+            textTags.forEach(function (t) { textSelectors.push(area + ' ' + t); });
+        });
+        var textDescendantBlock = `
+            ${textSelectors.join(', ')} {
+                font-size: ${size} !important;
+            }
+        `;
+
+        // [Block 6] 例外・調整用スタイル
         // アイコンフォントやバッジなど、継承で崩れるものを補正します。
+        // 対象エリア内のアイコンは Block 5 より詳細度を高くして継承に戻し、巻き込みを防ぎます。
+        var iconClasses = ['.fa', '.fas', '.far', '.fab', '.gaia-icon', '.kintoneplugin-button-icon'];
+        var iconSelectors = [];
+        targetAreas.forEach(function (area) {
+            iconClasses.forEach(function (c) { iconSelectors.push(area + ' ' + c); });
+        });
         var exceptionBlock = `
             .fa, .fas, .far, .fab, .gaia-icon { font-size: inherit !important; }
+            ${iconSelectors.join(', ')} { font-size: inherit !important; }
             .tab-icon-num-gaia { font-size: 0.8em !important; }
         `;
 
         // 全ブロックを結合して返します
-        return mainTextBlock + formControlBlock + buttonBlock + exceptionBlock;
+        return mainTextBlock + formControlBlock + buttonBlock + textDescendantBlock + exceptionBlock;
     }
 })();
