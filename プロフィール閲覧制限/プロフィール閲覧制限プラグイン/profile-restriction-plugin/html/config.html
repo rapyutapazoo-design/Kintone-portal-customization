@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>プロフィール閲覧制限プラグイン 設定</title>
+</head>
+<body>
+  <div class="config-container">
+    <h2 class="config-title">プロフィール閲覧制限プラグイン 設定</h2>
+
+    <section class="config-section">
+      <h3 class="config-section-title">許可する組織コード</h3>
+      <p class="config-desc">ここに指定した組織コードに所属するユーザーは、他のユーザーのプロフィールを閲覧できます。</p>
+      <div id="org-list"></div>
+      <button type="button" id="btn-add-org" class="config-btn-add">＋ 組織コードを追加</button>
+    </section>
+
+    <section class="config-section">
+      <h3 class="config-section-title">許可するグループコード</h3>
+      <p class="config-desc">ここに指定したグループコードに所属するユーザーは、他のユーザーのプロフィールを閲覧できます。</p>
+      <div id="group-list"></div>
+      <button type="button" id="btn-add-group" class="config-btn-add">＋ グループコードを追加</button>
+    </section>
+
+    <section class="config-section">
+      <h3 class="config-section-title">閲覧不可時のメッセージ</h3>
+      <p class="config-desc">閲覧権限のないユーザーがプロフィールページを開いた際に表示するメッセージです。</p>
+      <input type="text" id="message-input" class="config-input config-input-full"
+             placeholder="例: このプロフィールは閲覧できません。">
+    </section>
+
+    <div class="config-footer">
+      <button type="button" id="btn-save" class="config-btn-primary">保存</button>
+      <button type="button" id="btn-cancel" class="config-btn-secondary">キャンセル</button>
+    </div>
+  </div>
+</body>
+</html>

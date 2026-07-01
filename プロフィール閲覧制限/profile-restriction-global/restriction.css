@@ -1,0 +1,71 @@
+/**
+ * プロフィール閲覧制限 / restriction.css
+ * Web版・モバイル版共通スタイル
+ */
+
+/* ----------------------------------------------------------------
+   プロフィールページ：初期状態で非表示（ちらつき防止）
+   ---------------------------------------------------------------- */
+.page-user-profile .gaia-body-inner,
+[class*="user-profile"] .gaia-body-inner,
+[class*="userProfile"] .gaia-body-inner,
+body[class*="profile"] .gaia-body-inner {
+  visibility: hidden;
+}
+
+/* 許可ユーザー：表示を戻す */
+html.profile-restriction-allowed .page-user-profile .gaia-body-inner,
+html.profile-restriction-allowed [class*="user-profile"] .gaia-body-inner,
+html.profile-restriction-allowed [class*="userProfile"] .gaia-body-inner,
+html.profile-restriction-allowed body[class*="profile"] .gaia-body-inner {
+  visibility: visible;
+}
+
+/* 非許可ユーザー：非表示維持 */
+html.profile-restriction-blocked .page-user-profile .gaia-body-inner,
+html.profile-restriction-blocked [class*="user-profile"] .gaia-body-inner,
+html.profile-restriction-blocked [class*="userProfile"] .gaia-body-inner,
+html.profile-restriction-blocked body[class*="profile"] .gaia-body-inner {
+  visibility: hidden;
+}
+
+/* ----------------------------------------------------------------
+   閲覧不可メッセージのオーバーレイ
+   ---------------------------------------------------------------- */
+.profile-restriction-overlay {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #fff;
+  border: 1px solid #d8d8d8;
+  border-radius: 6px;
+  padding: 40px 48px;
+  font-size: 16px;
+  color: #444;
+  text-align: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  z-index: 9999;
+  max-width: 90vw;
+  line-height: 1.6;
+}
+
+/* モバイル向け調整 */
+@media (max-width: 768px) {
+  .profile-restriction-overlay {
+    padding: 32px 24px;
+    font-size: 15px;
+    width: 85vw;
+  }
+}
+
+/* ----------------------------------------------------------------
+   リンク無効化後のユーザー名スタイル
+   名前テキストは残し、リンク見た目（色・カーソル）だけ除去する
+   ---------------------------------------------------------------- */
+.profile-restriction-username {
+  color: inherit;
+  cursor: default;
+  font-weight: inherit;
+  text-decoration: none;
+}

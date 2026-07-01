@@ -1,0 +1,46 @@
+/**
+ * profile-restriction-plugin / mobile.css
+ * モバイル版 プロフィールページの先行非表示
+ */
+
+body[class*="profile"] .gaia-body-inner,
+.page-user-profile .gaia-body-inner,
+[class*="user-profile"] .gaia-body-inner {
+  visibility: hidden;
+}
+
+html.profile-restriction-allowed body[class*="profile"] .gaia-body-inner,
+html.profile-restriction-allowed .page-user-profile .gaia-body-inner,
+html.profile-restriction-allowed [class*="user-profile"] .gaia-body-inner {
+  visibility: visible;
+}
+
+html.profile-restriction-blocked body[class*="profile"] .gaia-body-inner,
+html.profile-restriction-blocked .page-user-profile .gaia-body-inner,
+html.profile-restriction-blocked [class*="user-profile"] .gaia-body-inner {
+  visibility: hidden;
+}
+
+.profile-restriction-overlay {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #fff;
+  border: 1px solid #d8d8d8;
+  border-radius: 6px;
+  padding: 32px 24px;
+  font-size: 15px;
+  color: #444;
+  text-align: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  z-index: 9999;
+  width: 85vw;
+  line-height: 1.6;
+}
+
+.profile-restriction-username {
+  color: inherit;
+  cursor: default;
+  font-weight: inherit;
+}

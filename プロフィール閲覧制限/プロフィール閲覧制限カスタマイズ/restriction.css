@@ -1,0 +1,63 @@
+/**
+ * プロフィール閲覧制限カスタマイズ / restriction.css
+ * Web版・モバイル版共通スタイル
+ */
+
+/* ----------------------------------------------------------------
+   プロフィールページ：判定中は body を非表示（ちらつき防止）
+   JSが同期的に html へ profile-restriction-checking クラスを付与した
+   タイミングで即時非表示にする。プロフィールページ以外には影響しない。
+   ---------------------------------------------------------------- */
+html.profile-restriction-checking body {
+  visibility: hidden;
+}
+
+/* 許可ユーザー：body を表示に戻す */
+html.profile-restriction-allowed body {
+  visibility: visible;
+}
+
+/* 非許可ユーザー：body 非表示を維持 */
+html.profile-restriction-blocked body {
+  visibility: hidden;
+}
+
+/* ----------------------------------------------------------------
+   閲覧不可メッセージのオーバーレイ
+   ---------------------------------------------------------------- */
+.profile-restriction-overlay {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #fff;
+  border: 1px solid #d8d8d8;
+  border-radius: 6px;
+  padding: 40px 48px;
+  font-size: 16px;
+  color: #444;
+  text-align: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  z-index: 9999;
+  max-width: 90vw;
+  line-height: 1.6;
+}
+
+@media (max-width: 768px) {
+  .profile-restriction-overlay {
+    padding: 32px 24px;
+    font-size: 15px;
+    width: 85vw;
+  }
+}
+
+/* ----------------------------------------------------------------
+   リンク無効化後のユーザー名（名前テキストは残し見た目のみ変更）
+   ---------------------------------------------------------------- */
+.profile-restriction-username {
+  color: inherit;
+  cursor: default;
+  font-weight: inherit;
+  text-decoration: none;
+  pointer-events: none; /* <span>変換後はマウス操作自体を無効化（第1層） */
+}

@@ -7,3 +7,9 @@ Thumbs.db
 
 # Environment variables
 .env
+
+# Dependencies (再生成可能なため管理対象外)
+node_modules/
+
+# Chrome拡張の秘密鍵（機微情報のため管理対象外）
+*.ppk
