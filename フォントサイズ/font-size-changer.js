@@ -150,11 +150,14 @@
     }
 
     // --- スタイル注入 (Allowlist) ---
-    // 小(14px)も含め常に注入する。リッチテキストは要素自身に font-size（例: large≒18px）を
-    // 持つため、14px時に注入を外すと「小」がインライン値に戻り、「中(18px)」と同じ見た目になる。
-    // 3段階（小/中/大）を明確に区別するため、14px でもCSSを当てて確実に上書きする。
+    // 小(14px) は「デフォルト（無適用）」とし、CSSを一切注入しない（既存の注入があれば削除）。
+    // 中(18px)・大(24px) のみ拡大CSS＋レイアウト正規化を注入する。
     function applyGlobalFontSize(size) {
         var styleEl = document.getElementById(STYLE_ID);
+        if (size === '14px') {
+            if (styleEl) styleEl.parentNode.removeChild(styleEl);
+            return;
+        }
         if (!styleEl) {
             styleEl = document.createElement('style');
             styleEl.id = STYLE_ID;
@@ -242,7 +245,38 @@
             .tab-icon-num-gaia { font-size: 0.8em !important; }
         `;
 
+        // [Block 7] レイアウト正規化（崩れ防止）
+        // 固定レイアウトのウィジェット（通知・スペース/アプリ一覧）は、文字拡大に器が追従できず
+        // 重なり・はみ出しが起きる。項目コンテナの固定高さを解除し、行高・折り返しを追従させる。
+        // ※スクロール親（.ocean-portal-ntflist-items 等）には overflow を当てない。
+        var normalizeBlock = `
+            .ocean-ntf-ntfitem,
+            .ocean-ntf-ntfitem-grid,
+            .ocean-ntf-ntfitem-content,
+            .ocean-ntf-ntfitem-body,
+            .ocean-ntf-ntfitem-detail {
+                height: auto !important;
+                min-height: 0 !important;
+                max-height: none !important;
+                overflow: visible !important;
+                line-height: 1.4 !important;
+            }
+            .ocean-ntf-ntfitem-grid { grid-template-rows: auto !important; }
+            .gaia-argoui-spacescrollinglist-item,
+            .gaia-argoui-appscrollinglist-item {
+                height: auto !important;
+                min-height: 0 !important;
+            }
+            .gaia-argoui-spacescrollinglist-name,
+            .gaia-argoui-appscrollinglist-name {
+                white-space: normal !important;
+                text-overflow: clip !important;
+                overflow: visible !important;
+                line-height: 1.4 !important;
+            }
+        `;
+
         // 全ブロックを結合して返します
-        return mainTextBlock + formControlBlock + buttonBlock + textDescendantBlock + exceptionBlock;
+        return mainTextBlock + formControlBlock + buttonBlock + textDescendantBlock + normalizeBlock + exceptionBlock;
     }
 })();
