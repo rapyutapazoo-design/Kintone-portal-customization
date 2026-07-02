@@ -40,10 +40,15 @@
         'space.portal.show', 'mobile.space.portal.show'
     ];
 
+    // メインのポータル画面のみ、Kintone純正のフローティングボタン（追加/保存等）と
+    // 衝突しないため、右上ではなく右下（従来位置）に配置する。
+    var PORTAL_EVENTS = ['portal.show', 'mobile.portal.show'];
+
     // --- メイン処理 ---
     kintone.events.on(FONT_UI_EVENTS, function (event) {
         ensureWidgetStyle();
         setupFontWidget();
+        updateWidgetPosition(event);
         return event;
     });
 
@@ -66,6 +71,7 @@
         st.id = WIDGET_STYLE_ID;
         st.textContent = [
             '#' + WIDGET_ID + '.cseg{position:fixed;right:16px;top:70px;z-index:10000;display:flex;align-items:center;gap:0;background:#fff;border:1px solid #e2e8f0;border-radius:9999px;box-shadow:0 6px 20px rgba(21,66,96,.18);padding:6px;transition:gap .25s ease;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Sans","Noto Sans JP",Roboto,sans-serif;}',
+            '#' + WIDGET_ID + '.cseg.on-portal{top:auto;bottom:22px;right:22px;}',
             '#' + WIDGET_ID + '.cseg.expanded{gap:8px;}',
             '#' + WIDGET_ID + ' .kfui-body{display:flex;align-items:center;overflow:hidden;transition:width .25s ease,opacity .15s ease;}',
             '#' + WIDGET_ID + '.cseg.collapsed .kfui-body{width:0;opacity:0;}',
@@ -82,6 +88,16 @@
             '#' + WIDGET_ID + ' .kfui-trigger:focus-visible{outline:2px solid #3498db;outline-offset:2px;}'
         ].join('\n');
         document.head.appendChild(st);
+    }
+
+    // --- ウィジェットの配置切り替え ---
+    // メインのポータル画面（PORTAL_EVENTS）の時だけ 'on-portal' クラスを付与し、
+    // 従来どおり右下に配置する。それ以外の画面では既定の右上（純正ボタン回避）のまま。
+    function updateWidgetPosition(event) {
+        var el = document.getElementById(WIDGET_ID);
+        if (!el) return;
+        var isPortal = PORTAL_EVENTS.indexOf(event.type) !== -1;
+        el.classList.toggle('on-portal', isPortal);
     }
 
     // --- ウィジェット本体の生成 ---
