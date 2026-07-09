@@ -36,6 +36,9 @@
         'portal.show', 'mobile.portal.show',
         'app.record.index.show', 'mobile.app.record.index.show',
         'app.record.detail.show', 'mobile.app.record.detail.show',
+        // 新規作成・編集画面。モバイルでの純正保存ツールバー衝突回避のため位置補正を発火させる
+        'app.record.create.show', 'mobile.app.record.create.show',
+        'app.record.edit.show', 'mobile.app.record.edit.show',
         'app.report.show',
         'space.portal.show', 'mobile.space.portal.show'
     ];
