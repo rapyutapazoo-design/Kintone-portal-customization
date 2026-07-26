@@ -81,6 +81,10 @@ export const EXCLUDE_ZONES = [
   '[class*="appsmenu"]',
   '[class*="favorite"]',
   '[class*="space-cover"]',
+  // レコードの「添付ファイル」フィールド（掲示板/スレッド/リッチテキストとは別のDOM構造）。
+  // サムネイルは a.control-value-item-gaia が record/download.do への直リンクを持つ、
+  // Kintone標準の値アイテム構造。ここではKintone標準ビューアーを尊重し、対象外にする。
+  'a[href*="/k/api/record/download.do"]',
   '.pswp', // PhotoSwipe自身のDOM
 ];
 
