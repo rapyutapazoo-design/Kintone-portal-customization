@@ -13,13 +13,22 @@
  *   これはセキュリティ機能ではなく「見た目の整理」です。
  *   URL 直打ち・検索・通知からは引き続きアクセスできます。
  *
- * 仕様:
+ * 仕様（全ユーザー共通。管理者等の特別扱いはありません）:
  *   - VISIBLE_SPACE_IDS に含まれるスペース         → 表示
  *   - 鍵マーク付き（非公開）スペース               → 表示（Kintone 標準で参加者にしか出ないため）
  *   - ALWAYS_KEEP_SPACE_IDS に含まれるスペース     → 表示（保険用）
+ *   - 自分が参加済みのスペース                     → 表示
  *   - スペース ID を判定できなかった要素           → 表示（安全側に倒す）
  *   - 上記以外の公開スペース                       → 非表示
- *   - 除外対象ユーザー / グループ / 組織           → 非表示処理そのものをスキップ
+ *
+ * 「参加済み」の判定方法（PC とモバイルで異なります）:
+ *   - モバイル: DOM 上に「参加中」を示すクラスが付くため、それだけで同期的に判定できます。
+ *   - PC: 実機で調査した限り、参加状態を示す DOM 上の手がかりが見つかりませんでした。
+ *     そのため、いったん非表示と判定したスペースだけに絞って、
+ *     kintone REST API（/k/v1/space/members.json）でメンバーかどうかを確認します。
+ *     API 呼び出しはホワイトリスト・鍵付きスペースには行われません。
+ *     ※ このエンドポイントは kintone.api.url() では正しい URL を作れないため、
+ *        パスを直接指定しています（checkMembership 関数のコメント参照）。
  *
  * 適用先: cybozu.com 共通管理 → JavaScript / CSS カスタマイズ（PC 用・モバイル用の両方に設定）
  */
@@ -43,16 +52,6 @@
     // 例: ALWAYS_KEEP_SPACE_IDS: ['1', '11', '12', '14']
     ALWAYS_KEEP_SPACE_IDS: [],
 
-    // 非表示処理を適用しない（＝全スペースがそのまま見える）ユーザーコード。
-    // API に一切依存しないため、確実に効かせたい場合はこちらを使ってください。
-    EXCLUDE_USER_CODES: [],
-
-    // 非表示処理を適用しないグループコード。
-    EXCLUDE_GROUP_CODES: ['デジタル委員会', 'Administrators'],
-
-    // 非表示処理を適用しない組織コード。
-    EXCLUDE_ORGANIZATION_CODES: [],
-
     // 表示対象が 0 件になったとき、スペースウィジェットごと隠すか
     HIDE_WIDGET_WHEN_EMPTY: true,
 
@@ -65,7 +64,7 @@
   // ============================================================
 
   var LOG_PREFIX = '[space-visibility-filter]';
-  var STORAGE_KEY = 'space-visibility-filter:excluded';
+  var JOIN_CACHE_PREFIX = 'space-visibility-filter:joined:';
   var FILTERED_ATTR = 'data-space-visibility-filtered';
   var PREHIDE_STYLE_ID = 'space-visibility-filter-prehide';
   var PREHIDE_TIMEOUT_MS = 2000;
@@ -80,6 +79,9 @@
       item: 'a.gaia-argoui-spacescrollinglist-item',
       row: 'li',
       privateMark: '.gaia-argoui-spacescrollinglist-private',
+      // PC は参加状態を示す DOM マーカーが確認できなかったため、API で確認する
+      joinedMark: null,
+      checkMembershipApi: true,
       list: 'ul.gaia-argoui-spacescrollinglist-list'
     },
     mobile: {
@@ -88,14 +90,17 @@
       item: 'a.gaia-mobile-v2-ui-space-spacelist-item-link',
       row: 'li',
       privateMark: '.gaia-mobile-v2-ui-space-spacelist-item-private-icon',
+      // モバイルは「参加中」バッジに対応するクラスが実機で確認できている
+      joinedMark: '.gaia-mobile-v2-ui-space-spacelist-item-tag-joined',
+      checkMembershipApi: false,
       list: 'ul.gaia-mobile-v2-ui-space-spacelist-list'
     }
   };
 
   var observer = null;
   var prehideTimer = null;
-  // 除外対象と確定したら true。以降は再試行・監視も含めて一切の非表示処理を行わない
-  var disabled = false;
+  // スペースIDごとのメンバーシップ確認リクエスト状況（重複呼び出し防止。ページ内でのみ有効）
+  var membershipRequested = {};
 
   function log() {
     if (!CONFIG.DEBUG) {
@@ -172,6 +177,30 @@
     return !!row.querySelector('[class*="private" i], [class*="lock" i]');
   }
 
+  /**
+   * 参加済みかどうか。
+   * - モバイル: DOM 上の「参加中」マークで同期的に判定する
+   * - PC: DOM に手がかりが無いため、過去に API で確認済み（sessionStorage キャッシュが
+   *   'yes'）の場合のみ true を返す。これにより、参加済みと確認済みのスペースが
+   *   MutationObserver 経由の再判定で非表示に巻き戻ることを防ぐ
+   *   （キャッシュを見ない場合、再判定のたびに同期条件だけで評価され直し、
+   *   API で確認済みだった事実が失われてしまう）。
+   */
+  function isJoinedSpace(spaceId, row, target) {
+    if (target.joinedMark) {
+      if (row.querySelector(target.joinedMark)) {
+        return true;
+      }
+      if (row.querySelector('[class*="joined" i]')) {
+        return true;
+      }
+    }
+    if (target.checkMembershipApi && spaceId !== null && readJoinCache(spaceId) === 'yes') {
+      return true;
+    }
+    return false;
+  }
+
   function shouldKeep(spaceId, row, target) {
     if (spaceId === null) {
       return true; // ID を判定できないものは消さない
@@ -183,6 +212,9 @@
       return true;
     }
     if (CONFIG.KEEP_PRIVATE_SPACES && isPrivateSpace(row, target)) {
+      return true;
+    }
+    if (isJoinedSpace(spaceId, row, target)) {
       return true;
     }
     return false;
@@ -208,6 +240,23 @@
     row.style.display = '';
   }
 
+  /** 表示対象が0件ならウィジェットごと隠す。1件でもあれば表示する */
+  function refreshWidgetVisibility(target) {
+    if (!CONFIG.HIDE_WIDGET_WHEN_EMPTY) {
+      return;
+    }
+    var widget = document.querySelector(target.widget);
+    if (!widget) {
+      return;
+    }
+    var items = widget.querySelectorAll(target.item);
+    var anyVisible = Array.prototype.some.call(items, function (item) {
+      var row = item.closest(target.row) || item;
+      return row.style.display !== 'none';
+    });
+    widget.style.display = anyVisible ? '' : 'none';
+  }
+
   /**
    * @returns {boolean} スペース一覧を見つけて処理できたら true
    */
@@ -221,38 +270,22 @@
       return false;
     }
 
-    var visibleCount = 0;
-    var hidden = [];
+    var hiddenIds = [];
 
     Array.prototype.forEach.call(items, function (item) {
       var row = item.closest(target.row) || item;
       var spaceId = extractSpaceId(item);
       if (shouldKeep(spaceId, row, target)) {
         showRow(row);
-        visibleCount++;
       } else {
         hideRow(row);
-        hidden.push(spaceId);
+        hiddenIds.push(spaceId);
       }
     });
 
-    if (CONFIG.HIDE_WIDGET_WHEN_EMPTY) {
-      widget.style.display = visibleCount === 0 ? 'none' : '';
-    }
-
-    log(target.name, '対象', items.length, '件 / 表示', visibleCount, '件 / 非表示', hidden);
+    refreshWidgetVisibility(target);
+    log(target.name, '対象', items.length, '件 / 非表示候補', hiddenIds);
     return true;
-  }
-
-  /** 除外対象と判明したときに、隠したものをすべて元に戻す */
-  function restoreAll(target) {
-    var rows = document.querySelectorAll('[' + FILTERED_ATTR + '="true"]');
-    Array.prototype.forEach.call(rows, showRow);
-    var widget = document.querySelector(target.widget);
-    if (widget) {
-      widget.style.display = '';
-    }
-    log(target.name, '除外対象のため元に戻しました');
   }
 
   /**
@@ -260,13 +293,10 @@
    * 見つかった後は MutationObserver で追加読み込み・再描画に追従する。
    */
   function applyWithRetry(target, remaining) {
-    if (disabled) {
-      releasePreHide();
-      return;
-    }
     if (applyFilter(target)) {
       releasePreHide();
       startObserver(target);
+      checkMembershipForCandidates(target);
       return;
     }
     if (remaining <= 0) {
@@ -287,10 +317,8 @@
     }
     // 監視するのは要素の増減のみ。自身の style 変更では発火しないため無限ループしない
     observer = new MutationObserver(function () {
-      if (disabled) {
-        return;
-      }
       applyFilter(target);
+      checkMembershipForCandidates(target);
     });
     observer.observe(widget, { childList: true, subtree: true });
   }
@@ -303,71 +331,119 @@
   }
 
   // ------------------------------------------------------------
-  // 除外ユーザー判定
+  // 参加済み判定（PC・API 経由）
   // ------------------------------------------------------------
 
-  function readCache(userCode) {
+  function readJoinCache(spaceId) {
     try {
-      return sessionStorage.getItem(STORAGE_KEY + ':' + userCode);
+      return sessionStorage.getItem(JOIN_CACHE_PREFIX + spaceId);
     } catch (e) {
       return null;
     }
   }
 
-  function writeCache(userCode, value) {
+  function writeJoinCache(spaceId, value) {
     try {
-      sessionStorage.setItem(STORAGE_KEY + ':' + userCode, value);
+      sessionStorage.setItem(JOIN_CACHE_PREFIX + spaceId, value);
     } catch (e) {
       // プライベートブラウジング等で失敗しても処理は続行する
     }
   }
 
-  function hasIntersection(codes, targetCodes) {
-    return codes.some(function (code) {
-      return targetCodes.indexOf(code) !== -1;
-    });
-  }
-
-  /** 所属グループコードを取得。取得できなければ空配列（＝除外しない） */
-  function fetchGroupCodes(userCode) {
-    if (!CONFIG.EXCLUDE_GROUP_CODES.length) {
-      return Promise.resolve([]);
-    }
+  /**
+   * 指定スペースに自分が参加しているかを API で確認する。
+   * このエンドポイントは kintone.api.url() ではなく /k/v1/... を直接指定する必要がある
+   * （kintone.api.url() はアプリ・レコード系のエンドポイント用で、スペース系には対応していない）。
+   */
+  function checkMembership(spaceId) {
     return kintone
-      .api(kintone.api.url('/v1/user/groups', true), 'GET', { code: userCode })
+      .api('/k/v1/space/members.json', 'GET', { id: spaceId })
       .then(function (resp) {
-        return (resp.groups || []).map(function (group) {
-          return group.code;
+        var userCode = kintone.getLoginUser().code;
+        var members = resp.members || [];
+        return members.some(function (member) {
+          return member && member.entity &&
+            member.entity.type === 'USER' &&
+            member.entity.code === userCode;
         });
       });
   }
 
-  /** 所属組織コードを取得。取得できなければ空配列（＝除外しない） */
-  function fetchOrganizationCodes(userCode) {
-    if (!CONFIG.EXCLUDE_ORGANIZATION_CODES.length) {
-      return Promise.resolve([]);
+  /** 現在非表示になっているスペースIDを重複なく集める */
+  function collectHiddenCandidateIds(target) {
+    var widget = document.querySelector(target.widget);
+    if (!widget) {
+      return [];
     }
-    return kintone
-      .api(kintone.api.url('/v1/user/organizations', true), 'GET', { code: userCode })
-      .then(function (resp) {
-        var titles = resp.organizationTitles || [];
-        return titles
-          .map(function (entry) {
-            return entry.organization ? entry.organization.code : null;
-          })
-          .filter(Boolean);
-      });
+    var ids = {};
+    Array.prototype.forEach.call(widget.querySelectorAll(target.item), function (item) {
+      var row = item.closest(target.row) || item;
+      if (row.getAttribute(FILTERED_ATTR) !== 'true') {
+        return;
+      }
+      var spaceId = extractSpaceId(item);
+      if (spaceId !== null) {
+        ids[spaceId] = true;
+      }
+    });
+    return Object.keys(ids);
   }
 
-  function checkExcluded(user) {
-    return Promise.all([
-      fetchGroupCodes(user.code),
-      fetchOrganizationCodes(user.code)
-    ]).then(function (results) {
-      var inGroup = hasIntersection(results[0], CONFIG.EXCLUDE_GROUP_CODES);
-      var inOrg = hasIntersection(results[1], CONFIG.EXCLUDE_ORGANIZATION_CODES);
-      log('所属グループ', results[0], '/ 所属組織', results[1]);
-      return inGroup || inOrg;
+  /** 指定スペースIDの行をすべて表示に戻す */
+  function showRowsForSpaceId(target, spaceId) {
+    var widget = document.querySelector(target.widget);
+    if (!widget) {
+      return;
+    }
+    Array.prototype.forEach.call(widget.querySelectorAll(target.item), function (item) {
+      if (extractSpaceId(item) !== spaceId) {
+        return;
+      }
+      var row = item.closest(target.row) || item;
+      showRow(row);
+    });
+    refreshWidgetVisibility(target);
+  }
+
+  /**
+   * 非表示候補（ホワイトリスト外・鍵なし・DOM上で参加済みと判定できなかったもの）
+   * だけに絞って、参加済みかどうかを API で確認する。
+   * 呼び出しはスペースIDごとに一度きり（キャッシュ・進行中フラグで重複を防ぐ）。
+   */
+  function checkMembershipForCandidates(target) {
+    if (!target.checkMembershipApi) {
+      return;
+    }
+    collectHiddenCandidateIds(target).forEach(function (spaceId) {
+      if (membershipRequested[spaceId]) {
+        return;
+      }
+
+      var cached = readJoinCache(spaceId);
+      if (cached === 'yes') {
+        membershipRequested[spaceId] = true;
+        showRowsForSpaceId(target, spaceId);
+        return;
+      }
+      if (cached === 'no') {
+        membershipRequested[spaceId] = true;
+        return;
+      }
+
+      membershipRequested[spaceId] = true;
+      checkMembership(spaceId)
+        .then(function (joined) {
+          writeJoinCache(spaceId, joined ? 'yes' : 'no');
+          if (joined) {
+            showRowsForSpaceId(target, spaceId);
+          }
+          log(target.name, 'メンバーシップ確認', spaceId, joined ? '参加済み→表示' : '未参加→非表示のまま');
+        })
+        .catch(function (error) {
+          // 確認できない場合は非表示のまま（フェイルセーフ）。キャッシュはせず次回また確認を試みる
+          membershipRequested[spaceId] = false;
+          warn('メンバーシップ確認に失敗しました', spaceId, error);
+        });
     });
   }
 
@@ -375,50 +451,10 @@
   // エントリーポイント
   // ------------------------------------------------------------
 
-  function run(target) {
-    var user = kintone.getLoginUser();
-
-    // ユーザーコード指定は API 不要で即座に判定できる
-    if (CONFIG.EXCLUDE_USER_CODES.indexOf(user.code) !== -1) {
-      log('除外ユーザーのためスキップ:', user.code);
-      releasePreHide();
-      return;
-    }
-
-    var cached = readCache(user.code);
-    if (cached === 'yes') {
-      log('除外対象（キャッシュ）のためスキップ:', user.code);
-      releasePreHide();
-      return;
-    }
-
-    // 先に非表示処理を適用する。一般ユーザーはこの時点で完了しちらつかない
-    applyWithRetry(target, RETRY_MAX);
-
-    if (cached !== null) {
-      return;
-    }
-
-    // グループ・組織の判定は非同期。除外対象だった場合のみ元に戻す（セッション中1回だけ）
-    checkExcluded(user)
-      .then(function (excluded) {
-        writeCache(user.code, excluded ? 'yes' : 'no');
-        if (excluded) {
-          disabled = true;
-          stopObserver();
-          restoreAll(target);
-        }
-      })
-      .catch(function (error) {
-        // 取得できない場合は除外なしとして扱う（非表示は見た目の整理であり業務影響がないため）
-        log('除外判定に失敗したため、非表示処理を維持します', error);
-      });
-  }
-
   function safeRun(target) {
     try {
       preHide();
-      run(target);
+      applyWithRetry(target, RETRY_MAX);
     } catch (error) {
       // 何が起きても一覧が隠れたままにならないようにする
       releasePreHide();
