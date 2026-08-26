@@ -280,6 +280,11 @@
                         offset += limit;
                         fetchPage();
                     } else {
+                        // アプリ名順（日本語ロケール）に一度だけソートしてキャッシュする。
+                        // 以降は毎行ソートせず、このソート済み配列を使い回す。
+                        results.sort(function (a, b) {
+                            return a.name.localeCompare(b.name, 'ja');
+                        });
                         appListCache = results;
                         onSuccess(results);
                     }
@@ -310,13 +315,11 @@
             '.psm-body{padding:16px 20px;overflow-y:auto;flex:1;}' +
             '.psm-row{display:flex;gap:8px;align-items:flex-start;margin-bottom:12px;' +
             'padding-bottom:12px;border-bottom:1px dashed #eee;flex-wrap:wrap;}' +
-            '.psm-row-main{flex:1;min-width:220px;display:flex;flex-direction:column;gap:6px;position:relative;}' +
+            '.psm-row-main{flex:1;min-width:220px;display:flex;flex-direction:column;gap:6px;}' +
             '.psm-input{padding:8px 10px;border:1px solid #ccc;border-radius:4px;font-size:13px;' +
             'width:100%;box-sizing:border-box;}' +
-            '.psm-suggest{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #ccc;' +
-            'border-radius:4px;max-height:160px;overflow-y:auto;z-index:10;box-shadow:0 4px 10px rgba(0,0,0,0.15);}' +
-            '.psm-suggest-item{padding:8px 10px;font-size:13px;cursor:pointer;}' +
-            '.psm-suggest-item:hover,.psm-suggest-item.psm-active{background:#f0f6ff;}' +
+            '.psm-select{padding:8px 10px;border:1px solid #ccc;border-radius:4px;font-size:13px;' +
+            'width:100%;box-sizing:border-box;background:#fff;}' +
             '.psm-row-actions{display:flex;gap:4px;align-items:center;}' +
             '.psm-icon-btn{min-width:30px;height:30px;padding:0 6px;border:1px solid #ddd;background:#fff;' +
             'border-radius:4px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;}' +
@@ -333,6 +336,7 @@
             '@media (max-width:600px){' +
             '.psm-overlay{align-items:stretch;justify-content:stretch;}' +
             '.psm-dialog{width:100%;max-width:100%;height:100%;max-height:100%;border-radius:0;}' +
+            '.psm-select{font-size:16px;}' +
             '}';
         document.head.appendChild(style);
     }
@@ -492,26 +496,41 @@
             var main = document.createElement('div');
             main.className = 'psm-row-main';
 
-            var appInput = document.createElement('input');
-            appInput.type = 'text';
-            appInput.className = 'psm-input';
-            appInput.placeholder = 'アプリ名で検索';
-            appInput.value = item.appName || '';
-            appInput.setAttribute('autocomplete', 'off');
-            main.appendChild(appInput);
+            var select = document.createElement('select');
+            select.className = 'psm-select';
 
-            var suggestBox = document.createElement('div');
-            suggestBox.className = 'psm-suggest';
-            suggestBox.style.display = 'none';
-            main.appendChild(suggestBox);
+            var placeholderOpt = document.createElement('option');
+            placeholderOpt.value = '';
+            placeholderOpt.textContent = 'アプリを選択してください';
+            select.appendChild(placeholderOpt);
 
             var unavailableEl = null;
+            var unavailableOpt = null;
             if (item.appId && !findAppName(item.appId)) {
+                // 削除済み・権限なしのアプリを select が勝手に別アプリへ変えてしまわないよう、
+                // 選択中のIDを保持する一時的な option を先頭付近に差し込んでおく。
+                unavailableOpt = document.createElement('option');
+                unavailableOpt.value = item.appId;
+                // アプリIDは画面に出さないため、アプリ名が不明な場合も汎用文言にとどめる
+                unavailableOpt.textContent = (item.appName || '選択中のアプリ') + '（利用できません）';
+                select.appendChild(unavailableOpt);
+
                 unavailableEl = document.createElement('div');
                 unavailableEl.className = 'psm-warn';
                 unavailableEl.textContent = 'このアプリは利用できません（削除済み、または閲覧権限がありません）。差し替えてください。';
-                main.appendChild(unavailableEl);
             }
+
+            // loadedApps は fetchAllApps 成功時に一度だけアプリ名順にソート済み。
+            for (var optIdx = 0; optIdx < loadedApps.length; optIdx++) {
+                var appOpt = document.createElement('option');
+                appOpt.value = loadedApps[optIdx].id;
+                appOpt.textContent = loadedApps[optIdx].name;
+                select.appendChild(appOpt);
+            }
+
+            select.value = item.appId || '';
+            main.appendChild(select);
+            if (unavailableEl) main.appendChild(unavailableEl);
 
             var labelInput = document.createElement('input');
             labelInput.type = 'text';
@@ -550,91 +569,33 @@
             row.appendChild(main);
             row.appendChild(actions);
 
-            var activeIdx = -1;
-            var currentMatches = [];
-
-            function highlightActive() {
-                var children = suggestBox.children;
-                for (var i = 0; i < children.length; i++) {
-                    children[i].className = (i === activeIdx) ? 'psm-suggest-item psm-active' : 'psm-suggest-item';
-                }
-            }
-
-            function renderSuggestions(matches) {
-                removeAllChildren(suggestBox);
-                currentMatches = matches;
-                activeIdx = -1;
-                if (!matches.length) {
-                    suggestBox.style.display = 'none';
+            select.addEventListener('change', function () {
+                var newAppId = select.value;
+                if (!newAppId) {
+                    // プレースホルダーが選ばれた場合は未選択として扱う（保存時バリデーションで弾かれる）
+                    item.appId = '';
+                    dirty = true;
                     return;
                 }
-                var shown = matches.slice(0, 20);
-                shown.forEach(function (app) {
-                    var opt = document.createElement('div');
-                    opt.className = 'psm-suggest-item';
-                    opt.textContent = app.name;
-                    opt.onmousedown = function (e) {
-                        e.preventDefault();
-                        selectApp(app);
-                    };
-                    suggestBox.appendChild(opt);
-                });
-                suggestBox.style.display = 'block';
-            }
-
-            function selectApp(app) {
+                var appName = findAppName(newAppId) || '';
                 var wasAutoLabel = !item.labelCustom;
-                item.appId = app.id;
-                item.appName = app.name;
+                item.appId = newAppId;
+                item.appName = appName;
                 if (wasAutoLabel || !labelInput.value) {
-                    item.label = app.name;
-                    labelInput.value = app.name;
+                    item.label = appName;
+                    labelInput.value = appName;
                     item.labelCustom = false;
                 }
-                appInput.value = app.name;
-                suggestBox.style.display = 'none';
                 if (unavailableEl && unavailableEl.parentNode) {
                     unavailableEl.parentNode.removeChild(unavailableEl);
                     unavailableEl = null;
                 }
-                dirty = true;
-            }
-
-            appInput.addEventListener('input', function () {
-                dirty = true;
-                var q = appInput.value.trim();
-                var matches = q
-                    ? loadedApps.filter(function (a) { return a.name.toLowerCase().indexOf(q.toLowerCase()) !== -1; })
-                    : loadedApps.slice(0, 20);
-                renderSuggestions(matches);
-            });
-            appInput.addEventListener('focus', function () {
-                var q = appInput.value.trim();
-                var matches = q
-                    ? loadedApps.filter(function (a) { return a.name.toLowerCase().indexOf(q.toLowerCase()) !== -1; })
-                    : loadedApps.slice(0, 20);
-                renderSuggestions(matches);
-            });
-            appInput.addEventListener('blur', function () {
-                // クリック選択（mousedown）を先に処理させるため少し遅延させて閉じる
-                setTimeout(function () { suggestBox.style.display = 'none'; }, 150);
-            });
-            appInput.addEventListener('keydown', function (e) {
-                if (suggestBox.style.display === 'none') return;
-                if (e.key === 'ArrowDown') {
-                    e.preventDefault();
-                    activeIdx = Math.min(activeIdx + 1, currentMatches.length - 1);
-                    highlightActive();
-                } else if (e.key === 'ArrowUp') {
-                    e.preventDefault();
-                    activeIdx = Math.max(activeIdx - 1, 0);
-                    highlightActive();
-                } else if (e.key === 'Enter') {
-                    if (activeIdx >= 0 && currentMatches[activeIdx]) {
-                        e.preventDefault();
-                        selectApp(currentMatches[activeIdx]);
-                    }
+                // 利用できないアプリを選び直した後は、その選択肢自体も取り除く
+                if (unavailableOpt && unavailableOpt.parentNode && unavailableOpt.value !== newAppId) {
+                    unavailableOpt.parentNode.removeChild(unavailableOpt);
+                    unavailableOpt = null;
                 }
+                dirty = true;
             });
 
             labelInput.addEventListener('input', function () {
@@ -682,8 +643,8 @@
             workingList.push({ appId: '', appName: '', label: '', labelCustom: false });
             dirty = true;
             renderRows();
-            var inputs = rowsContainer.querySelectorAll('.psm-input');
-            if (inputs.length >= 2) inputs[inputs.length - 2].focus(); // 追加行のアプリ検索欄
+            var selects = rowsContainer.querySelectorAll('.psm-select');
+            if (selects.length) selects[selects.length - 1].focus(); // 追加行のアプリ選択欄
         };
 
         resetBtn.onclick = function () {
@@ -729,8 +690,8 @@
             loadingMsg.style.display = 'none';
             rowsContainer.style.display = 'block';
             renderRows();
-            var firstInput = rowsContainer.querySelector('.psm-input');
-            if (firstInput) firstInput.focus();
+            var firstSelect = rowsContainer.querySelector('.psm-select');
+            if (firstSelect) firstSelect.focus();
         }, function () {
             loadingMsg.style.display = 'none';
             showError('アプリ一覧の取得に失敗しました。時間をおいて再度お試しください。既存の設定は変更されていません。');
