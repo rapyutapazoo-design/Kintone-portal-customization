@@ -20,8 +20,16 @@
  *
  * 【個人カスタマイズ（⚙️）】
  *   ポータル上部の ⚙️ ボタンから、ショートカットの遷移先・表示名・並び順・個数を
- *   ユーザー本人が編集できる。設定は localStorage にログインユーザー単位で保存され、
- *   端末・ブラウザ間の同期は行わない。未設定時は appList（管理者既定値）を表示する。
+ *   ユーザー本人が編集できる。設定は localStorage にログインユーザー単位でキャッシュされ、
+ *   未設定時は appList（管理者既定値）を表示する。
+ *
+ * 【端末間同期（任意）】
+ *   別途用意した「設定アプリ」（フィールド: login_name / settings_json）を使い、
+ *   ユーザーが「すべての端末で共有する（既定）／この端末だけに保存する」を選べる。
+ *   SETTINGS_APP_ID がプレースホルダーのままの場合は同期機能自体が無効化され、
+ *   リモートAPIは一切呼ばれず、従来どおり端末（localStorage）ごとの保存で動作する。
+ *   ポータル描画は常に localStorage キャッシュから即時に行い、同期は描画後に非同期で
+ *   後追いする（初期表示速度に影響しない）。
  */
 (function () {
     "use strict";
@@ -51,12 +59,24 @@
     var BTN_MARKER_ATTR = 'data-shortcut-btn'; // ショートカットボタン再描画時の削除対象マーカー（data-shortcut-renderedとは別物）
     var MODAL_STYLE_ID = 'portal-shortcut-modal-style';
 
+    // --- 端末間同期（設定アプリ方式） 用 定数 ---
+    // SETTINGS_APP_ID はプレースホルダー。実値版ファイルで実際のアプリIDに書き換えて使う。
+    // プレースホルダーのままなら isSyncAvailable() が false を返し、同期機能一式が無効化される。
+    var SETTINGS_APP_ID = 'your-settings-app-id';
+    var FIELD_LOGIN_NAME = 'login_name';         // 文字列1行・重複禁止（ログインユーザーのログイン名）
+    var FIELD_SETTINGS_JSON = 'settings_json';   // 文字列複数行（設定JSON文字列）
+    var STORAGE_MODE_KEY_PREFIX = 'kintone_portal_shortcuts_mode'; // 保存先モードの localStorage キー（端末ごと）
+    var SYNC_MODE_APP = 'app';     // すべての端末で共有する（既定）
+    var SYNC_MODE_LOCAL = 'local'; // この端末だけに保存する
+
     // --- 配置するアプリ一覧（管理者既定値。ユーザーが ⚙️ で未設定の場合にこの内容が表示される） ---
+    // 【重要】本リポジトリはパブリックのため、id は your-app-id-N のプレースホルダーのまま維持している。
+    // 実際のアプリIDは非公開の実値版ファイル（各機能の開発プロジェクト側）にのみ記入すること。
     var appList = [
-        { id: 'your-app-id-1', name: 'アプリ名1' },
-        { id: 'your-app-id-2', name: 'アプリ名2' },
-        { id: 'your-app-id-3', name: 'アプリ名3' },
-        { id: 'your-app-id-4', name: 'アプリ名4' }
+        { id: 'your-app-id-1', name: '管理規約' },   // 実IDは非公開の実値版ファイルに記入
+        { id: 'your-app-id-2', name: '意見書' },     // 実IDは非公開の実値版ファイルに記入
+        { id: 'your-app-id-3', name: '施設予約' },   // 実IDは非公開の実値版ファイルに記入
+        { id: 'your-app-id-4', name: 'カレンダー' }  // 実IDは非公開の実値版ファイルに記入
     ]; // 実際に配置したいアプリのIDと名称に書き換えてください（行数は自由に増減できます）
 
     // ============================================================
@@ -177,33 +197,28 @@
     }
 
     /**
-     * 保存済み設定を読み込む。以下はすべて既定 appList へのサイレントフォールバックとする:
-     * キー不在 / JSONパース失敗 / 配列でない / 要素数が範囲外 / アプリIDが空 / スキーマ不明。
+     * 設定JSON文字列をパース・バリデーションする。以下はすべて null（無効）とする:
+     * 値なし / JSONパース失敗 / 配列でない / 要素数が範囲外 / アプリIDが空 / スキーマ不明。
+     * localStorage から読む場合・リモート（設定アプリ）から読む場合の両方で共用する。
      */
-    function loadShortcutSettings() {
-        var raw;
-        try {
-            raw = localStorage.getItem(getStorageKey());
-        } catch (e) {
-            return defaultShortcutList();
-        }
-        if (!raw) return defaultShortcutList();
+    function parseSettingsJson(raw) {
+        if (!raw) return null;
 
         var parsed;
         try {
             parsed = JSON.parse(raw);
         } catch (e) {
-            return defaultShortcutList();
+            return null;
         }
-        if (!parsed || typeof parsed !== 'object') return defaultShortcutList();
-        if (parsed.version !== SETTINGS_SCHEMA_VERSION) return defaultShortcutList();
-        if (!Array.isArray(parsed.buttons)) return defaultShortcutList();
-        if (parsed.buttons.length < MIN_SHORTCUTS || parsed.buttons.length > MAX_SHORTCUTS) return defaultShortcutList();
+        if (!parsed || typeof parsed !== 'object') return null;
+        if (parsed.version !== SETTINGS_SCHEMA_VERSION) return null;
+        if (!Array.isArray(parsed.buttons)) return null;
+        if (parsed.buttons.length < MIN_SHORTCUTS || parsed.buttons.length > MAX_SHORTCUTS) return null;
 
         var normalized = [];
         for (var i = 0; i < parsed.buttons.length; i++) {
             var item = parsed.buttons[i];
-            if (!isValidSavedItem(item)) return defaultShortcutList();
+            if (!isValidSavedItem(item)) return null;
             var appName = (typeof item.appName === 'string') ? item.appName : '';
             var label = (typeof item.label === 'string' && item.label) ? item.label : (appName || item.appId);
             normalized.push({
@@ -216,8 +231,22 @@
         return normalized;
     }
 
-    /** 保存する。件数(4〜6)・アプリID必須 のバリデーションを再度実施する。 */
-    function saveShortcutSettings(list) {
+    /**
+     * 保存済み設定（localStorageキャッシュ）を読み込む。無効な場合は既定 appList へフォールバックする。
+     */
+    function loadShortcutSettings() {
+        var raw;
+        try {
+            raw = localStorage.getItem(getStorageKey());
+        } catch (e) {
+            return defaultShortcutList();
+        }
+        var normalized = parseSettingsJson(raw);
+        return normalized || defaultShortcutList();
+    }
+
+    /** 件数(4〜6)・アプリID必須 のバリデーション（保存直前に再実施する）。 */
+    function validateShortcutList(list) {
         if (!Array.isArray(list) || list.length < MIN_SHORTCUTS || list.length > MAX_SHORTCUTS) {
             throw new Error('ショートカットは' + MIN_SHORTCUTS + '〜' + MAX_SHORTCUTS + '個にしてください。');
         }
@@ -226,7 +255,11 @@
                 throw new Error('アプリが選択されていない行があります。');
             }
         }
-        var payload = {
+    }
+
+    /** localStorage 保存 / リモート保存の両方で使う、共通スキーマのペイロードを組み立てる。 */
+    function buildSettingsPayload(list) {
+        return {
             version: SETTINGS_SCHEMA_VERSION,
             buttons: list.map(function (item) {
                 return {
@@ -237,6 +270,12 @@
                 };
             })
         };
+    }
+
+    /** 保存する。件数(4〜6)・アプリID必須 のバリデーションを再度実施する。 */
+    function saveShortcutSettings(list) {
+        validateShortcutList(list);
+        var payload = buildSettingsPayload(list);
         try {
             localStorage.setItem(getStorageKey(), JSON.stringify(payload));
         } catch (e) {
@@ -250,6 +289,168 @@
         } catch (e) {
             // 削除失敗は致命的ではないため無視する
         }
+    }
+
+    // ============================================================
+    // 端末間同期（設定アプリ方式）: 保存先モード・同期可否・リモートAPI
+    // ============================================================
+
+    /** 保存先モード（'app'=共有 / 'local'=この端末だけ）を保存する localStorage キー（端末・ユーザー単位）。 */
+    function getStorageModeKey() {
+        try {
+            var user = kintone.getLoginUser();
+            if (user && user.id) {
+                return STORAGE_MODE_KEY_PREFIX + '_' + user.id;
+            }
+        } catch (e) {
+            // フォールバックへ
+        }
+        return STORAGE_MODE_KEY_PREFIX + '_default';
+    }
+
+    /**
+     * 端末間同期機能が有効かどうか。SETTINGS_APP_ID が数値として解釈できる文字列でない
+     * （＝プレースホルダーのまま）場合は false を返す。false の場合、呼び出し側は
+     * リモートAPIを一切呼ばず、保存先モードは常に 'local' として扱うこと。
+     */
+    function isSyncAvailable() {
+        return (/^[0-9]+$/).test(String(SETTINGS_APP_ID));
+    }
+
+    /** 現在の保存先モードを取得する。同期無効時は常に 'local'。既定値は 'app'（共有）。 */
+    function getStorageMode() {
+        if (!isSyncAvailable()) return SYNC_MODE_LOCAL;
+        try {
+            var mode = localStorage.getItem(getStorageModeKey());
+            if (mode === SYNC_MODE_APP || mode === SYNC_MODE_LOCAL) return mode;
+        } catch (e) {
+            // 既定へ
+        }
+        return SYNC_MODE_APP;
+    }
+
+    function setStorageMode(mode) {
+        try {
+            localStorage.setItem(getStorageModeKey(), mode);
+        } catch (e) {
+            // 保存できなくても致命的ではないため無視する
+        }
+    }
+
+    function getLoginName() {
+        try {
+            var user = kintone.getLoginUser();
+            if (user && user.code) return user.code;
+        } catch (e) {
+            // 取得不可
+        }
+        return null;
+    }
+
+    /** 設定アプリから、自分（ログイン名一致）のレコードを1件取得する。なければ null を返す。 */
+    function fetchRemoteRecord(onSuccess, onError) {
+        var loginName = getLoginName();
+        if (!loginName) {
+            onError(new Error('ログインユーザー情報を取得できません。'));
+            return;
+        }
+        var query = FIELD_LOGIN_NAME + ' = "' + loginName.replace(/"/g, '\\"') + '" limit 1';
+        kintone.api(kintone.api.url('/k/v1/records.json', true), 'GET',
+            { app: SETTINGS_APP_ID, query: query },
+            function (resp) {
+                var records = (resp && resp.records) ? resp.records : [];
+                onSuccess(records.length ? records[0] : null);
+            },
+            function (err) {
+                onError(err);
+            }
+        );
+    }
+
+    /** 設定を設定アプリへ保存する。既存レコードがあれば更新（PUT）、なければ新規作成（POST）。 */
+    function saveRemote(list, onSuccess, onError) {
+        var loginName = getLoginName();
+        if (!loginName) {
+            onError(new Error('ログインユーザー情報を取得できません。'));
+            return;
+        }
+        var jsonStr = JSON.stringify(buildSettingsPayload(list));
+
+        fetchRemoteRecord(function (record) {
+            if (record) {
+                var updateRecord = {};
+                updateRecord[FIELD_SETTINGS_JSON] = { value: jsonStr };
+                kintone.api(kintone.api.url('/k/v1/record.json', true), 'PUT',
+                    { app: SETTINGS_APP_ID, id: record.$id.value, record: updateRecord },
+                    function (resp) { onSuccess(resp); },
+                    function (err) { onError(err); }
+                );
+            } else {
+                var newRecord = {};
+                newRecord[FIELD_LOGIN_NAME] = { value: loginName };
+                newRecord[FIELD_SETTINGS_JSON] = { value: jsonStr };
+                kintone.api(kintone.api.url('/k/v1/record.json', true), 'POST',
+                    { app: SETTINGS_APP_ID, record: newRecord },
+                    function (resp) { onSuccess(resp); },
+                    function (err) { onError(err); }
+                );
+            }
+        }, function (err) {
+            onError(err);
+        });
+    }
+
+    /** 設定アプリの自分のレコードを削除する（既定に戻す・共有モード時）。レコードがなければ何もしない。 */
+    function deleteRemote(onSuccess, onError) {
+        fetchRemoteRecord(function (record) {
+            if (!record) {
+                onSuccess();
+                return;
+            }
+            kintone.api(kintone.api.url('/k/v1/records.json', true), 'DELETE',
+                { app: SETTINGS_APP_ID, ids: [record.$id.value] },
+                function (resp) { onSuccess(resp); },
+                function (err) { onError(err); }
+            );
+        }, function (err) {
+            onError(err);
+        });
+    }
+
+    /**
+     * ポータル描画直後に、非同期でリモート設定と同期する（保存先モードが 'app' かつ同期有効な場合のみ）。
+     * 取得失敗・レコードなし・バリデーション不合格の場合は何もしない（キャッシュ表示を維持し、
+     * console.error のみ行う。ユーザーへのエラー表示はしない）。内容がキャッシュと異なる場合のみ
+     * localStorage を上書きし、onChanged（再描画コールバック）を呼ぶ。
+     */
+    function syncFromRemote(onChanged) {
+        if (!isSyncAvailable() || getStorageMode() !== SYNC_MODE_APP) return;
+
+        fetchRemoteRecord(function (record) {
+            if (!record) return;
+            var field = record[FIELD_SETTINGS_JSON];
+            var remoteRaw = field ? field.value : null;
+            var normalized = parseSettingsJson(remoteRaw);
+            if (!normalized) return;
+
+            var payloadStr = JSON.stringify(buildSettingsPayload(normalized));
+            var currentRaw;
+            try {
+                currentRaw = localStorage.getItem(getStorageKey());
+            } catch (e) {
+                currentRaw = null;
+            }
+            if (currentRaw === payloadStr) return; // キャッシュと同一内容のため何もしない
+
+            try {
+                localStorage.setItem(getStorageKey(), payloadStr);
+            } catch (e) {
+                return; // キャッシュ更新に失敗した場合は何もしない
+            }
+            if (onChanged) onChanged();
+        }, function (err) {
+            console.error('portal-shortcut: リモート設定の取得に失敗しました。', err);
+        });
     }
 
     // ============================================================
@@ -313,9 +514,15 @@
             '.psm-title{font-size:16px;font-weight:bold;margin:0;}' +
             '.psm-close{background:none;border:none;font-size:20px;cursor:pointer;line-height:1;color:#888;}' +
             '.psm-body{padding:16px 20px;overflow-y:auto;flex:1;}' +
-            '.psm-row{display:flex;gap:8px;align-items:flex-start;margin-bottom:12px;' +
-            'padding-bottom:12px;border-bottom:1px dashed #eee;flex-wrap:wrap;}' +
-            '.psm-row-main{flex:1;min-width:220px;display:flex;flex-direction:column;gap:6px;}' +
+            '.psm-intro{font-size:13px;color:#666;margin:0 0 14px 0;}' +
+            '.psm-row{display:flex;gap:10px;align-items:flex-start;margin-bottom:12px;' +
+            'padding:12px;border:1px solid #e3e7ea;border-radius:6px;background:#fafbfc;flex-wrap:wrap;}' +
+            '.psm-row-badge{flex:0 0 auto;width:20px;height:20px;border-radius:50%;background:#e9eef3;' +
+            'color:#55606a;font-size:12px;font-weight:bold;display:flex;align-items:center;' +
+            'justify-content:center;margin-top:2px;}' +
+            '.psm-row-main{flex:1;min-width:220px;display:flex;flex-direction:column;gap:8px;}' +
+            '.psm-field{display:flex;flex-direction:column;}' +
+            '.psm-field-label{font-size:11px;font-weight:bold;color:#5a6570;margin:0 0 3px 0;}' +
             '.psm-input{padding:8px 10px;border:1px solid #ccc;border-radius:4px;font-size:13px;' +
             'width:100%;box-sizing:border-box;}' +
             '.psm-select{padding:8px 10px;border:1px solid #ccc;border-radius:4px;font-size:13px;' +
@@ -325,6 +532,10 @@
             'border-radius:4px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;}' +
             '.psm-icon-btn:disabled{opacity:0.35;cursor:not-allowed;}' +
             '.psm-warn{color:#c0392b;font-size:12px;margin-top:2px;}' +
+            '.psm-sync-section{margin-top:6px;padding-top:14px;border-top:1px solid #eee;}' +
+            '.psm-sync-heading{font-size:12px;font-weight:bold;color:#5a6570;margin:0 0 8px 0;}' +
+            '.psm-sync-option{display:flex;align-items:center;gap:6px;font-size:13px;color:#444;' +
+            'margin-bottom:6px;cursor:pointer;}' +
             '.psm-footer{display:flex;justify-content:space-between;align-items:center;' +
             'padding:14px 20px;border-top:1px solid #eee;gap:8px;flex-wrap:wrap;}' +
             '.psm-footer-left,.psm-footer-right{display:flex;gap:8px;}' +
@@ -336,7 +547,7 @@
             '@media (max-width:600px){' +
             '.psm-overlay{align-items:stretch;justify-content:stretch;}' +
             '.psm-dialog{width:100%;max-width:100%;height:100%;max-height:100%;border-radius:0;}' +
-            '.psm-select{font-size:16px;}' +
+            '.psm-input,.psm-select{font-size:16px;}' +
             '}';
         document.head.appendChild(style);
     }
@@ -345,6 +556,7 @@
     // 個人カスタマイズ: 設定モーダル本体
     // ============================================================
     var isModalOpen = false; // 多重クリックによる二重オープン防止
+    var modalInstanceCounter = 0; // 保存先ラジオの name 属性をモーダルごとに一意にするための連番
 
     /**
      * ⚙️ モーダルを開く。
@@ -362,6 +574,7 @@
         });
         var dirty = false;
         var loadedApps = [];
+        var selectedMode = getStorageMode(); // 保存先モード（'app'=共有 / 'local'=この端末だけ）。既定は共有。
 
         var overlay = document.createElement('div');
         overlay.className = 'psm-overlay';
@@ -387,6 +600,11 @@
         body.className = 'psm-body';
         dialog.appendChild(body);
 
+        var introMsg = document.createElement('p');
+        introMsg.className = 'psm-intro';
+        introMsg.textContent = '「登録するアプリ」で遷移先を選び、「ボタンに表示する名前」でポータルに表示される文字を決めます。';
+        body.appendChild(introMsg);
+
         var errorMsg = document.createElement('p');
         errorMsg.className = 'psm-error';
         errorMsg.style.display = 'none';
@@ -400,6 +618,59 @@
         var rowsContainer = document.createElement('div');
         rowsContainer.style.display = 'none';
         body.appendChild(rowsContainer);
+
+        // --- 保存先ラジオ（同期機能が有効な場合のみ表示） ---
+        var syncSection = null;
+        var modeRadioApp = null;
+        var modeRadioLocal = null;
+        if (isSyncAvailable()) {
+            modalInstanceCounter++;
+            var syncRadioName = 'psm-sync-mode-' + modalInstanceCounter;
+
+            syncSection = document.createElement('div');
+            syncSection.className = 'psm-sync-section';
+            syncSection.style.display = 'none'; // rowsContainer と同様、アプリ一覧取得後に表示する
+
+            var syncHeading = document.createElement('div');
+            syncHeading.className = 'psm-sync-heading';
+            syncHeading.textContent = 'この設定の保存先';
+            syncSection.appendChild(syncHeading);
+
+            var syncLabelApp = document.createElement('label');
+            syncLabelApp.className = 'psm-sync-option';
+            modeRadioApp = document.createElement('input');
+            modeRadioApp.type = 'radio';
+            modeRadioApp.name = syncRadioName;
+            modeRadioApp.value = SYNC_MODE_APP;
+            syncLabelApp.appendChild(modeRadioApp);
+            syncLabelApp.appendChild(document.createTextNode('すべての端末で共有する（PC・スマホで同じ内容になります）'));
+            syncSection.appendChild(syncLabelApp);
+
+            var syncLabelLocal = document.createElement('label');
+            syncLabelLocal.className = 'psm-sync-option';
+            modeRadioLocal = document.createElement('input');
+            modeRadioLocal.type = 'radio';
+            modeRadioLocal.name = syncRadioName;
+            modeRadioLocal.value = SYNC_MODE_LOCAL;
+            syncLabelLocal.appendChild(modeRadioLocal);
+            syncLabelLocal.appendChild(document.createTextNode('この端末だけに保存する'));
+            syncSection.appendChild(syncLabelLocal);
+
+            if (selectedMode === SYNC_MODE_LOCAL) {
+                modeRadioLocal.checked = true;
+            } else {
+                modeRadioApp.checked = true;
+            }
+
+            modeRadioApp.addEventListener('change', function () {
+                if (modeRadioApp.checked) { selectedMode = SYNC_MODE_APP; dirty = true; }
+            });
+            modeRadioLocal.addEventListener('change', function () {
+                if (modeRadioLocal.checked) { selectedMode = SYNC_MODE_LOCAL; dirty = true; }
+            });
+
+            body.appendChild(syncSection);
+        }
 
         var footer = document.createElement('div');
         footer.className = 'psm-footer';
@@ -493,11 +764,29 @@
             var row = document.createElement('div');
             row.className = 'psm-row';
 
+            var badge = document.createElement('div');
+            badge.className = 'psm-row-badge';
+            badge.textContent = String(index + 1);
+            row.appendChild(badge);
+
             var main = document.createElement('div');
             main.className = 'psm-row-main';
 
+            var appFieldId = 'psm-app-select-' + index;
+            var labelFieldId = 'psm-label-input-' + index;
+
+            var appField = document.createElement('div');
+            appField.className = 'psm-field';
+
+            var appFieldLabel = document.createElement('label');
+            appFieldLabel.className = 'psm-field-label';
+            appFieldLabel.setAttribute('for', appFieldId);
+            appFieldLabel.textContent = '登録するアプリ';
+            appField.appendChild(appFieldLabel);
+
             var select = document.createElement('select');
             select.className = 'psm-select';
+            select.id = appFieldId;
 
             var placeholderOpt = document.createElement('option');
             placeholderOpt.value = '';
@@ -529,15 +818,27 @@
             }
 
             select.value = item.appId || '';
-            main.appendChild(select);
-            if (unavailableEl) main.appendChild(unavailableEl);
+            appField.appendChild(select);
+            if (unavailableEl) appField.appendChild(unavailableEl);
+            main.appendChild(appField);
+
+            var labelField = document.createElement('div');
+            labelField.className = 'psm-field';
+
+            var labelFieldLabel = document.createElement('label');
+            labelFieldLabel.className = 'psm-field-label';
+            labelFieldLabel.setAttribute('for', labelFieldId);
+            labelFieldLabel.textContent = 'ボタンに表示する名前';
+            labelField.appendChild(labelFieldLabel);
 
             var labelInput = document.createElement('input');
             labelInput.type = 'text';
             labelInput.className = 'psm-input';
-            labelInput.placeholder = '表示名';
+            labelInput.id = labelFieldId;
+            labelInput.placeholder = '未入力の場合はアプリ名を表示します';
             labelInput.value = item.label || '';
-            main.appendChild(labelInput);
+            labelField.appendChild(labelInput);
+            main.appendChild(labelField);
 
             var actions = document.createElement('div');
             actions.className = 'psm-row-actions';
@@ -648,11 +949,34 @@
         };
 
         resetBtn.onclick = function () {
-            if (!window.confirm('保存済みのショートカット設定を削除し、既定のアプリ一覧に戻します。よろしいですか？')) return;
-            resetShortcutSettings();
-            dirty = false;
-            closeModal();
-            onSaved();
+            var useRemoteDelete = isSyncAvailable() && selectedMode === SYNC_MODE_APP;
+            var confirmMsg = useRemoteDelete
+                ? '保存済みのショートカット設定を削除し、既定のアプリ一覧に戻します。すべての端末の設定が既定に戻ります。よろしいですか？'
+                : '保存済みのショートカット設定を削除し、既定のアプリ一覧に戻します。よろしいですか？';
+            if (!window.confirm(confirmMsg)) return;
+
+            if (!useRemoteDelete) {
+                resetShortcutSettings();
+                dirty = false;
+                closeModal();
+                onSaved();
+                return;
+            }
+
+            // 共有モード: リモートのレコードを削除できてからローカルキャッシュを削除する
+            // （中途半端な状態を避けるため、失敗時はどちらも削除しない）。
+            resetBtn.disabled = true;
+            deleteRemote(function () {
+                resetShortcutSettings();
+                resetBtn.disabled = false;
+                dirty = false;
+                closeModal();
+                onSaved();
+            }, function (err) {
+                console.error('portal-shortcut: リモート設定の削除に失敗しました。', err);
+                resetBtn.disabled = false;
+                showError('既定に戻す処理に失敗しました。ネットワーク状況をご確認のうえ、再度お試しください。');
+            });
         };
 
         saveBtn.onclick = function () {
@@ -667,15 +991,45 @@
                 showError('ショートカットは' + MIN_SHORTCUTS + '〜' + MAX_SHORTCUTS + '個にしてください。');
                 return;
             }
-            try {
-                saveShortcutSettings(workingList);
-            } catch (e) {
-                showError((e && e.message) ? e.message : '保存に失敗しました。');
+
+            if (!isSyncAvailable() || selectedMode === SYNC_MODE_LOCAL) {
+                try {
+                    saveShortcutSettings(workingList);
+                } catch (e) {
+                    showError((e && e.message) ? e.message : '保存に失敗しました。');
+                    return;
+                }
+                setStorageMode(SYNC_MODE_LOCAL);
+                dirty = false;
+                closeModal();
+                onSaved();
                 return;
             }
-            dirty = false;
-            closeModal();
-            onSaved();
+
+            // 共有モード: まずリモート（設定アプリ）へ保存し、成功後にローカルキャッシュを更新する。
+            var originalSaveLabel = saveBtn.textContent;
+            saveBtn.disabled = true;
+            saveBtn.textContent = '保存中...';
+
+            saveRemote(workingList, function () {
+                try {
+                    saveShortcutSettings(workingList);
+                } catch (e) {
+                    saveBtn.disabled = false;
+                    saveBtn.textContent = originalSaveLabel;
+                    showError((e && e.message) ? e.message : '保存に失敗しました。');
+                    return;
+                }
+                setStorageMode(SYNC_MODE_APP);
+                dirty = false;
+                closeModal();
+                onSaved();
+            }, function (err) {
+                console.error('portal-shortcut: リモートへの保存に失敗しました。', err);
+                saveBtn.disabled = false;
+                saveBtn.textContent = originalSaveLabel;
+                showError('設定の保存に失敗しました。ネットワーク状況をご確認いただくか、「この端末だけに保存する」を選んで再度お試しください。');
+            });
         };
 
         // --- 画面へ追加＆背景スクロール抑止 ---
@@ -689,6 +1043,7 @@
             refreshAppNames();
             loadingMsg.style.display = 'none';
             rowsContainer.style.display = 'block';
+            if (syncSection) syncSection.style.display = 'block';
             renderRows();
             var firstSelect = rowsContainer.querySelector('.psm-select');
             if (firstSelect) firstSelect.focus();
@@ -815,6 +1170,9 @@
         }
 
         redrawShortcuts();
+        // キャッシュから即描画した直後、非同期でリモート設定と同期する（共有モード＋同期有効時のみ）。
+        // ポータルの初期描画はブロックしない。
+        syncFromRemote(redrawShortcuts);
 
         var colorBtn = createConfigBtn('🎨', '色を変更');
         colorBtn.onclick = function () {
