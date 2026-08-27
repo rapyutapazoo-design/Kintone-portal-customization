@@ -1,0 +1,17 @@
+{
+  "name": "kintone-mobile-image-viewer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Kintoneモバイル版で掲示板・スペース・レコード(リッチテキスト)の画像をタップ拡大表示するカスタマイズ",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch"
+  },
+  "dependencies": {
+    "photoswipe": "^5.4.4"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0"
+  }
+}

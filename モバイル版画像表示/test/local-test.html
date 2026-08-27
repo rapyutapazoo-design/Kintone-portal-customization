@@ -1,0 +1,23 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Kintone Image Viewer - CSS injection test (no external css)</title>
+<!-- ★ photoswipe.css は意図的にリンクしない。JSバンドルが自動注入するはず -->
+<style>
+  body { font-family: sans-serif; padding: 16px; max-width: 420px; }
+  .block { border: 1px solid #ccc; padding: 12px; margin: 12px 0; }
+  img.thumb { width: 120px; height: 90px; object-fit: cover; margin: 4px; }
+</style>
+<script>window.__KIV_FORCE__ = true;</script>
+
+<div id="container">
+  <div class="gaia-mobile-v2-portal-announcement-content block">
+    <img class="ocean-attached-file gaia-ui-slideshow-thumbnail" alt="bulletin1"
+         src="https://picsum.photos/id/10/250/188?thumb"
+         data-original="https://picsum.photos/id/10/1200/800" width="250" />
+    <img class="ocean-attached-file gaia-ui-slideshow-thumbnail" alt="bulletin2"
+         src="https://picsum.photos/id/20/250/300?thumb"
+         data-original="https://picsum.photos/id/20/1000/1200" width="250" />
+  </div>
+</div>
+
+<script src="../dist/kintone-image-viewer.bundle.js"></script>
