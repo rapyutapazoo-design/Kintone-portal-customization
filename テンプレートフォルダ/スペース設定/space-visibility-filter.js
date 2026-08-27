@@ -40,8 +40,8 @@
   // ============================================================
   var CONFIG = {
     // ポータルに表示し続けるスペース ID。ここに無い公開スペースは隠れます。
-    //   2 = 餅つき親睦会 / 3 = 防災 / 6 = アップデートノート / 16 = ハブスペース
-    VISIBLE_SPACE_IDS: ['2', '3', '6', '16'],
+    //   your-space-id-1 = スペース名1 / your-space-id-2 = スペース名2 / your-space-id-3 = スペース名3 / your-space-id-4 = ハブスペース
+    VISIBLE_SPACE_IDS: ['your-space-id-1', 'your-space-id-2', 'your-space-id-3', 'your-space-id-4'],
 
     // 鍵マーク（非公開）付きのスペースを非表示の対象から外すか。
     // 非公開スペースは Kintone 標準で参加者にしか表示されないため、通常は true のまま。
@@ -49,7 +49,7 @@
 
     // 【保険】鍵マークの自動判定が Kintone の仕様変更で壊れ、
     // 非公開スペースがポータルから消えてしまった場合に、その ID をここへ追加すると復旧します。
-    // 例: ALWAYS_KEEP_SPACE_IDS: ['1', '11', '12', '14']
+    // 例: ALWAYS_KEEP_SPACE_IDS: ['your-space-id-5', 'your-space-id-6']
     ALWAYS_KEEP_SPACE_IDS: [],
 
     // 表示対象が 0 件になったとき、スペースウィジェットごと隠すか
