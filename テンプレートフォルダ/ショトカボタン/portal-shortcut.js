@@ -39,11 +39,13 @@
     var PORTAL_EVENTS = ['portal.show', 'mobile.portal.show'];
 
     // --- ショートカット用 定数 ---
+    // base / tint は設定モーダルのテーマ連動用の派生色（単色）。
+    // grad / shadow はショートカットボタン本体が使う既存の値であり、変更しないこと。
     var THEMES = [
-        { name: 'navy', grad: 'linear-gradient(135deg, #154260 0%, #2b7bc0 100%)', shadow: '0 4px 10px rgba(21, 66, 96, 0.4)' },
-        { name: 'green', grad: 'linear-gradient(135deg, #134E5E 0%, #71B280 100%)', shadow: '0 4px 10px rgba(19, 78, 94, 0.4)' },
-        { name: 'purple', grad: 'linear-gradient(135deg, #4b134f 0%, #c94b4b 100%)', shadow: '0 4px 10px rgba(75, 19, 79, 0.4)' },
-        { name: 'standard', grad: '#3498db', shadow: '0 4px 10px rgba(52, 152, 219, 0.4)' }
+        { name: 'navy', grad: 'linear-gradient(135deg, #154260 0%, #2b7bc0 100%)', shadow: '0 4px 10px rgba(21, 66, 96, 0.4)', base: '#154260', tint: '#dbe9f5' },
+        { name: 'green', grad: 'linear-gradient(135deg, #134E5E 0%, #71B280 100%)', shadow: '0 4px 10px rgba(19, 78, 94, 0.4)', base: '#134E5E', tint: '#d9ebe4' },
+        { name: 'purple', grad: 'linear-gradient(135deg, #4b134f 0%, #c94b4b 100%)', shadow: '0 4px 10px rgba(75, 19, 79, 0.4)', base: '#4b134f', tint: '#ecdcee' },
+        { name: 'standard', grad: '#3498db', shadow: '0 4px 10px rgba(52, 152, 219, 0.4)', base: '#2d80b8', tint: '#dbeaf6' }
     ];
     var SHAPES = [
         { name: 'capsule', radius: '30px' },
@@ -170,6 +172,44 @@
         while (el.firstChild) {
             el.removeChild(el.firstChild);
         }
+    }
+
+    /**
+     * localStorage に保存された添字から要素を取り出す。
+     * 未設定・数値でない・範囲外の場合は先頭要素にフォールバックする。
+     */
+    function pickByStoredIndex(list, storageKey) {
+        var idx = 0;
+        try {
+            var parsed = parseInt(localStorage.getItem(storageKey), 10);
+            if (!isNaN(parsed) && parsed >= 0 && parsed < list.length) {
+                idx = parsed;
+            }
+        } catch (e) {
+            // 既定（先頭）へ
+        }
+        return list[idx];
+    }
+
+    /** 設定モーダルのテーマ連動用。現在のテーマ（色）を返す。 */
+    function getCurrentTheme() {
+        return pickByStoredIndex(THEMES, 'kintone_portal_theme_idx');
+    }
+
+    /** 設定モーダルのプレビュー用。現在の形状（角丸）を返す。 */
+    function getCurrentShape() {
+        return pickByStoredIndex(SHAPES, 'kintone_portal_shape_idx');
+    }
+
+    /**
+     * テーマの grad を background-image として使える値に正規化する。
+     * standard テーマの grad は単色（#3498db）であり、そのままでは background-image に
+     * 指定できず宣言ごと無効になる（＝白背景に白文字で読めなくなる）。
+     * 単色の場合はフラットな linear-gradient に包んで返す。
+     */
+    function toBackgroundImage(grad) {
+        if (grad && grad.indexOf('gradient') !== -1) return grad;
+        return 'linear-gradient(' + grad + ', ' + grad + ')';
     }
 
     function getStorageKey() {
@@ -505,49 +545,78 @@
         var style = document.createElement('style');
         style.id = MODAL_STYLE_ID;
         style.textContent =
-            '.psm-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);' +
-            'z-index:100000;display:flex;align-items:center;justify-content:center;}' +
-            '.psm-dialog{background:#fff;border-radius:8px;width:520px;max-width:92vw;max-height:86vh;' +
-            'display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,0.3);}' +
-            '.psm-header{display:flex;justify-content:space-between;align-items:center;' +
-            'padding:16px 20px;border-bottom:1px solid #eee;}' +
-            '.psm-title{font-size:16px;font-weight:bold;margin:0;}' +
-            '.psm-close{background:none;border:none;font-size:20px;cursor:pointer;line-height:1;color:#888;}' +
-            '.psm-body{padding:16px 20px;overflow-y:auto;flex:1;}' +
-            '.psm-intro{font-size:13px;color:#666;margin:0 0 14px 0;}' +
-            '.psm-row{display:flex;gap:10px;align-items:flex-start;margin-bottom:12px;' +
-            'padding:12px;border:1px solid #e3e7ea;border-radius:6px;background:#fafbfc;flex-wrap:wrap;}' +
-            '.psm-row-badge{flex:0 0 auto;width:20px;height:20px;border-radius:50%;background:#e9eef3;' +
-            'color:#55606a;font-size:12px;font-weight:bold;display:flex;align-items:center;' +
-            'justify-content:center;margin-top:2px;}' +
-            '.psm-row-main{flex:1;min-width:220px;display:flex;flex-direction:column;gap:8px;}' +
+            '.psm-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(17,24,32,0.45);' +
+            '-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);' +
+            'z-index:100000;display:flex;align-items:center;justify-content:center;' +
+            'opacity:0;transition:opacity 150ms ease;}' +
+            '.psm-overlay.psm-visible{opacity:1;}' +
+            '.psm-dialog{background:#fff;border-radius:14px;width:560px;max-width:92vw;max-height:86vh;' +
+            'display:flex;flex-direction:column;overflow:hidden;' +
+            'box-shadow:0 1px 2px rgba(0,0,0,.05),0 16px 48px rgba(0,0,0,.16);' +
+            'transform:scale(.97) translateY(10px);transition:transform 200ms cubic-bezier(.2,.8,.3,1);}' +
+            '.psm-overlay.psm-visible .psm-dialog{transform:scale(1) translateY(0);}' +
+            '.psm-header{display:flex;justify-content:space-between;align-items:center;padding:18px 22px;' +
+            'background-image:linear-gradient(rgba(0,0,0,.12),rgba(0,0,0,.12)),var(--psm-grad,linear-gradient(#154260,#154260));}' +
+            '.psm-title{font-size:16px;font-weight:500;margin:0;color:#fff;}' +
+            '.psm-close{width:26px;height:26px;padding:0;border:none;border-radius:50%;cursor:pointer;' +
+            'background:rgba(255,255,255,.18);color:#fff;font-size:16px;line-height:1;' +
+            'display:flex;align-items:center;justify-content:center;transition:background .15s;}' +
+            '.psm-close:hover{background:rgba(255,255,255,.3);}' +
+            '.psm-body{padding:16px 22px;overflow-y:auto;flex:1;background:#f6f8fa;}' +
+            '.psm-intro{font-size:13px;color:#6b7684;margin:0 0 14px 0;}' +
+            '.psm-preview-box{background:#fff;border:1px solid #e6eaef;border-radius:10px;padding:12px;' +
+            'margin-bottom:14px;display:flex;flex-wrap:wrap;gap:6px;max-height:96px;overflow-y:auto;}' +
+            '.psm-preview-btn{padding:8px 10px;font-size:11px;font-weight:bold;color:#fff;' +
+            'text-align:center;line-height:1.3;box-sizing:border-box;}' +
+            '.psm-preview-empty{padding:7px 10px;font-size:11px;color:#8b95a1;' +
+            'border:1px dashed #c8d0d8;border-radius:8px;background:#fff;}' +
+            '.psm-row{display:flex;gap:12px;align-items:flex-start;margin-bottom:10px;' +
+            'padding:14px;border:1px solid #e6eaef;border-radius:10px;background:#fff;flex-wrap:wrap;}' +
+            '.psm-row-badge{flex:0 0 auto;width:24px;height:24px;border-radius:50%;' +
+            'background:var(--psm-tint,#dbe9f5);color:var(--psm-base,#154260);font-size:11px;font-weight:500;' +
+            'display:flex;align-items:center;justify-content:center;margin-top:2px;}' +
+            '.psm-row-main{flex:1;min-width:220px;display:flex;flex-direction:column;gap:10px;}' +
             '.psm-field{display:flex;flex-direction:column;}' +
-            '.psm-field-label{font-size:11px;font-weight:bold;color:#5a6570;margin:0 0 3px 0;}' +
-            '.psm-input{padding:8px 10px;border:1px solid #ccc;border-radius:4px;font-size:13px;' +
-            'width:100%;box-sizing:border-box;}' +
-            '.psm-select{padding:8px 10px;border:1px solid #ccc;border-radius:4px;font-size:13px;' +
-            'width:100%;box-sizing:border-box;background:#fff;}' +
-            '.psm-row-actions{display:flex;gap:4px;align-items:center;}' +
-            '.psm-icon-btn{min-width:30px;height:30px;padding:0 6px;border:1px solid #ddd;background:#fff;' +
-            'border-radius:4px;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;}' +
+            '.psm-field-label{font-size:11px;font-weight:500;color:#6b7684;letter-spacing:.04em;margin:0 0 5px 0;}' +
+            '.psm-input,.psm-select{padding:10px 12px;border:1px solid #d8dee4;border-radius:8px;font-size:13px;' +
+            'width:100%;box-sizing:border-box;background:#fff;color:#1a2027;transition:border-color .15s,box-shadow .15s;}' +
+            '.psm-input:focus,.psm-select:focus{outline:none;border-color:var(--psm-base,#154260);' +
+            'box-shadow:0 0 0 3px var(--psm-tint,#dbe9f5);}' +
+            '.psm-row-actions{display:flex;gap:6px;align-items:center;}' +
+            '.psm-icon-btn{width:32px;height:32px;padding:0;border:1px solid #e0e5ea;background:#fff;' +
+            'border-radius:8px;cursor:pointer;font-size:12px;color:#6b7684;' +
+            'display:flex;align-items:center;justify-content:center;transition:background .15s;}' +
+            '.psm-icon-btn:hover:not(:disabled){background:#f2f5f8;}' +
             '.psm-icon-btn:disabled{opacity:0.35;cursor:not-allowed;}' +
             '.psm-warn{color:#c0392b;font-size:12px;margin-top:2px;}' +
-            '.psm-sync-section{margin-top:6px;padding-top:14px;border-top:1px solid #eee;}' +
-            '.psm-sync-heading{font-size:12px;font-weight:bold;color:#5a6570;margin:0 0 8px 0;}' +
-            '.psm-sync-option{display:flex;align-items:center;gap:6px;font-size:13px;color:#444;' +
-            'margin-bottom:6px;cursor:pointer;}' +
+            '.psm-sync-section{margin-top:14px;padding-top:14px;border-top:1px solid #e6eaef;}' +
+            '.psm-sync-heading{font-size:11px;font-weight:500;color:#6b7684;letter-spacing:.04em;margin:0 0 8px 0;}' +
+            '.psm-seg{display:flex;background:#eaeef2;border-radius:9px;padding:3px;gap:3px;}' +
+            '.psm-seg-option{flex:1;position:relative;display:flex;align-items:center;justify-content:center;' +
+            'text-align:center;padding:8px 6px;border-radius:7px;font-size:12px;color:#5f6b76;' +
+            'cursor:pointer;transition:background .15s,color .15s;}' +
+            '.psm-seg-option input{position:absolute;opacity:0;width:1px;height:1px;margin:0;}' +
+            '.psm-seg-option.psm-seg-active{background:var(--psm-base,#154260);color:#fff;}' +
+            '.psm-seg-option input:focus-visible + span{outline:2px solid var(--psm-base,#154260);outline-offset:3px;}' +
+            '.psm-sync-note{font-size:12px;color:#6b7684;margin:8px 0 0 0;}' +
             '.psm-footer{display:flex;justify-content:space-between;align-items:center;' +
-            'padding:14px 20px;border-top:1px solid #eee;gap:8px;flex-wrap:wrap;}' +
+            'padding:14px 22px;border-top:1px solid #e6eaef;gap:8px;flex-wrap:wrap;background:#fff;}' +
             '.psm-footer-left,.psm-footer-right{display:flex;gap:8px;}' +
-            '.psm-btn{padding:8px 14px;border-radius:4px;font-size:13px;cursor:pointer;border:1px solid #ccc;background:#fff;}' +
+            '.psm-btn{padding:9px 14px;border-radius:8px;font-size:13px;cursor:pointer;' +
+            'border:1px solid #dde2e8;background:#fff;color:#3d4650;transition:background .15s;}' +
+            '.psm-btn:hover:not(:disabled){background:#f2f5f8;}' +
             '.psm-btn:disabled{opacity:0.4;cursor:not-allowed;}' +
-            '.psm-btn-primary{background:#3498db;border-color:#3498db;color:#fff;}' +
+            '.psm-btn-primary{padding:9px 18px;border:none;background-image:var(--psm-grad,linear-gradient(#154260,#154260));color:#fff;}' +
+            '.psm-btn-primary:hover:not(:disabled){filter:brightness(1.08);background-image:var(--psm-grad,linear-gradient(#154260,#154260));}' +
             '.psm-error{color:#c0392b;font-size:13px;margin:0 0 10px 0;}' +
-            '.psm-loading{padding:40px 0;text-align:center;color:#888;font-size:13px;}' +
+            '.psm-loading{padding:40px 0;text-align:center;color:#8b95a1;font-size:13px;}' +
             '@media (max-width:600px){' +
             '.psm-overlay{align-items:stretch;justify-content:stretch;}' +
-            '.psm-dialog{width:100%;max-width:100%;height:100%;max-height:100%;border-radius:0;}' +
+            '.psm-dialog{width:100%;max-width:100%;height:100%;max-height:100%;border-radius:0;' +
+            'transform:translateY(14px);}' +
+            '.psm-overlay.psm-visible .psm-dialog{transform:translateY(0);}' +
             '.psm-input,.psm-select{font-size:16px;}' +
+            '.psm-seg{flex-direction:column;}' +
             '}';
         document.head.appendChild(style);
     }
@@ -576,8 +645,16 @@
         var loadedApps = [];
         var selectedMode = getStorageMode(); // 保存先モード（'app'=共有 / 'local'=この端末だけ）。既定は共有。
 
+        // 現在のテーマ・形状（🎨 / 🔲 の選択値）。モーダルの配色とプレビューに使う。
+        var theme = getCurrentTheme();
+        var shape = getCurrentShape();
+
         var overlay = document.createElement('div');
         overlay.className = 'psm-overlay';
+        // テーマ色を CSS カスタムプロパティとして注入する（CSS は1度だけ注入したまま色だけ差し替える）。
+        overlay.style.setProperty('--psm-grad', toBackgroundImage(theme.grad));
+        overlay.style.setProperty('--psm-base', theme.base);
+        overlay.style.setProperty('--psm-tint', theme.tint);
 
         var dialog = document.createElement('div');
         dialog.className = 'psm-dialog';
@@ -615,14 +692,53 @@
         loadingMsg.textContent = 'アプリ一覧を取得しています...';
         body.appendChild(loadingMsg);
 
+        // --- 完成イメージ（プレビュー）。アプリ一覧の取得後に表示する ---
+        var previewWrap = document.createElement('div');
+        previewWrap.style.display = 'none';
+        var previewLabel = document.createElement('p');
+        previewLabel.className = 'psm-field-label';
+        previewLabel.textContent = '完成イメージ';
+        previewWrap.appendChild(previewLabel);
+        var previewBox = document.createElement('div');
+        previewBox.className = 'psm-preview-box';
+        previewWrap.appendChild(previewBox);
+        body.appendChild(previewWrap);
+
         var rowsContainer = document.createElement('div');
         rowsContainer.style.display = 'none';
         body.appendChild(rowsContainer);
 
-        // --- 保存先ラジオ（同期機能が有効な場合のみ表示） ---
+        /**
+         * 作業コピーの内容から、ポータルに表示されるボタンの完成イメージを描き直す。
+         * 色（テーマ）と角丸（形状）は実物と同じ値を使い、サイズのみ縮小する。
+         */
+        function renderPreview() {
+            removeAllChildren(previewBox);
+            workingList.forEach(function (item) {
+                if (!item.appId) {
+                    var empty = document.createElement('div');
+                    empty.className = 'psm-preview-empty';
+                    empty.textContent = '未選択';
+                    previewBox.appendChild(empty);
+                    return;
+                }
+                var btn = document.createElement('div');
+                btn.className = 'psm-preview-btn';
+                // 実際のボタン描画と同じ優先順。ただしアプリIDは画面に出さない。
+                btn.textContent = item.label || item.appName || '（未設定）';
+                btn.style.background = theme.grad;
+                btn.style.boxShadow = theme.shadow;
+                btn.style.borderRadius = shape.radius;
+                previewBox.appendChild(btn);
+            });
+        }
+
+        // --- 保存先セグメントコントロール（同期機能が有効な場合のみ表示） ---
+        // ラジオボタン自体は残し（キーボード操作・支援技術のため）、視覚的に隠して
+        // label をボタン状に見せる。選択状態は change ハンドラでクラスを付け替える。
         var syncSection = null;
-        var modeRadioApp = null;
-        var modeRadioLocal = null;
+        var segLabelApp = null;
+        var segLabelLocal = null;
         if (isSyncAvailable()) {
             modalInstanceCounter++;
             var syncRadioName = 'psm-sync-mode-' + modalInstanceCounter;
@@ -636,38 +752,66 @@
             syncHeading.textContent = 'この設定の保存先';
             syncSection.appendChild(syncHeading);
 
-            var syncLabelApp = document.createElement('label');
-            syncLabelApp.className = 'psm-sync-option';
-            modeRadioApp = document.createElement('input');
-            modeRadioApp.type = 'radio';
-            modeRadioApp.name = syncRadioName;
-            modeRadioApp.value = SYNC_MODE_APP;
-            syncLabelApp.appendChild(modeRadioApp);
-            syncLabelApp.appendChild(document.createTextNode('すべての端末で共有する（PC・スマホで同じ内容になります）'));
-            syncSection.appendChild(syncLabelApp);
+            var segGroup = document.createElement('div');
+            segGroup.className = 'psm-seg';
 
-            var syncLabelLocal = document.createElement('label');
-            syncLabelLocal.className = 'psm-sync-option';
-            modeRadioLocal = document.createElement('input');
-            modeRadioLocal.type = 'radio';
-            modeRadioLocal.name = syncRadioName;
-            modeRadioLocal.value = SYNC_MODE_LOCAL;
-            syncLabelLocal.appendChild(modeRadioLocal);
-            syncLabelLocal.appendChild(document.createTextNode('この端末だけに保存する'));
-            syncSection.appendChild(syncLabelLocal);
+            var buildSegOption = function (value, text) {
+                var label = document.createElement('label');
+                label.className = 'psm-seg-option';
+                var radio = document.createElement('input');
+                radio.type = 'radio';
+                radio.name = syncRadioName;
+                radio.value = value;
+                var caption = document.createElement('span');
+                caption.textContent = text;
+                label.appendChild(radio);
+                label.appendChild(caption);
+                label.radioEl = radio;
+                segGroup.appendChild(label);
+                return label;
+            };
+
+            segLabelApp = buildSegOption(SYNC_MODE_APP, 'すべての端末で共有');
+            segLabelLocal = buildSegOption(SYNC_MODE_LOCAL, 'この端末だけ');
+
+            var updateSegActive = function () {
+                if (selectedMode === SYNC_MODE_LOCAL) {
+                    segLabelLocal.className = 'psm-seg-option psm-seg-active';
+                    segLabelApp.className = 'psm-seg-option';
+                } else {
+                    segLabelApp.className = 'psm-seg-option psm-seg-active';
+                    segLabelLocal.className = 'psm-seg-option';
+                }
+            };
 
             if (selectedMode === SYNC_MODE_LOCAL) {
-                modeRadioLocal.checked = true;
+                segLabelLocal.radioEl.checked = true;
             } else {
-                modeRadioApp.checked = true;
+                segLabelApp.radioEl.checked = true;
             }
+            updateSegActive();
 
-            modeRadioApp.addEventListener('change', function () {
-                if (modeRadioApp.checked) { selectedMode = SYNC_MODE_APP; dirty = true; }
+            segLabelApp.radioEl.addEventListener('change', function () {
+                if (segLabelApp.radioEl.checked) {
+                    selectedMode = SYNC_MODE_APP;
+                    dirty = true;
+                    updateSegActive();
+                }
             });
-            modeRadioLocal.addEventListener('change', function () {
-                if (modeRadioLocal.checked) { selectedMode = SYNC_MODE_LOCAL; dirty = true; }
+            segLabelLocal.radioEl.addEventListener('change', function () {
+                if (segLabelLocal.radioEl.checked) {
+                    selectedMode = SYNC_MODE_LOCAL;
+                    dirty = true;
+                    updateSegActive();
+                }
             });
+
+            syncSection.appendChild(segGroup);
+
+            var syncNote = document.createElement('p');
+            syncNote.className = 'psm-sync-note';
+            syncNote.textContent = '「すべての端末で共有」を選ぶと、PC・スマホで同じ内容になります。';
+            syncSection.appendChild(syncNote);
 
             body.appendChild(syncSection);
         }
@@ -707,11 +851,24 @@
 
         var prevBodyOverflow = document.body.style.overflow;
 
+        var isClosing = false;
+
+        /**
+         * 閉じアニメーションを再生してから DOM を除去する。
+         * 多重呼び出し（例: Escape 連打）に備えて isClosing でガードする。
+         * isModalOpen の解除は要素の除去と同じタイミングで行い、閉じアニメーション中に
+         * 再度開けてしまうのを防ぐ。
+         */
         function closeModal() {
+            if (isClosing) return;
+            isClosing = true;
             document.body.style.overflow = prevBodyOverflow;
             document.removeEventListener('keydown', onKeyDown);
-            if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-            isModalOpen = false;
+            overlay.className = 'psm-overlay'; // psm-visible を外して逆方向へ遷移させる
+            setTimeout(function () {
+                if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+                isModalOpen = false;
+            }, 200);
         }
 
         function confirmDiscardIfDirty(callback) {
@@ -876,6 +1033,7 @@
                     // プレースホルダーが選ばれた場合は未選択として扱う（保存時バリデーションで弾かれる）
                     item.appId = '';
                     dirty = true;
+                    renderPreview();
                     return;
                 }
                 var appName = findAppName(newAppId) || '';
@@ -897,12 +1055,14 @@
                     unavailableOpt = null;
                 }
                 dirty = true;
+                renderPreview();
             });
 
             labelInput.addEventListener('input', function () {
                 item.label = labelInput.value;
                 item.labelCustom = (labelInput.value !== item.appName);
                 dirty = true;
+                renderPreview();
             });
 
             upBtn.onclick = function () {
@@ -937,6 +1097,8 @@
                 rowsContainer.appendChild(buildRow(item, index));
             });
             updateFooterState();
+            // 並び替え・追加・削除・既定に戻す は renderRows を経由するため、ここで一括して追従させる
+            renderPreview();
         }
 
         addBtn.onclick = function () {
@@ -1037,11 +1199,21 @@
         document.addEventListener('keydown', onKeyDown);
         document.body.appendChild(overlay);
 
+        // 開くアニメーション: DOM 追加の1フレーム後にクラスを付けて遷移させる
+        if (window.requestAnimationFrame) {
+            window.requestAnimationFrame(function () {
+                overlay.className = 'psm-overlay psm-visible';
+            });
+        } else {
+            setTimeout(function () { overlay.className = 'psm-overlay psm-visible'; }, 16);
+        }
+
         // --- アプリ一覧取得（モーダルを開いた時のみ） ---
         fetchAllApps(function (apps) {
             loadedApps = apps;
             refreshAppNames();
             loadingMsg.style.display = 'none';
+            previewWrap.style.display = 'block';
             rowsContainer.style.display = 'block';
             if (syncSection) syncSection.style.display = 'block';
             renderRows();
