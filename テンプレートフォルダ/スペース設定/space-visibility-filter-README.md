@@ -80,7 +80,7 @@ PC・モバイルの両方の処理が 1 ファイルに入っているため、
 Kintone 側の仕様変更で鍵マークの自動判定が効かなくなった可能性があります。**消えてしまった非公開スペースの ID を `ALWAYS_KEEP_SPACE_IDS` に追加**すると、その場で復旧できます。
 
 ```js
-ALWAYS_KEEP_SPACE_IDS: ['1', '11', '12', '14'],
+ALWAYS_KEEP_SPACE_IDS: ['your-space-id-1', 'your-space-id-2', 'your-space-id-3', 'your-space-id-4'],
 ```
 
 そのうえで、下記「保守のポイント」のセレクタを実際の DOM に合わせて更新してください。

@@ -14,7 +14,7 @@
 (function () {
     "use strict";
 
-    var INQUIRY_APP_ID = '82';
+    var INQUIRY_APP_ID = 'your-inquiry-app-id';
     var BUTTON_ID = 'inquiry-digital-committee-shortcut';
     var PORTAL_EVENTS = ['portal.show', 'mobile.portal.show'];
     var MAX_WAIT_MS = 5000;
