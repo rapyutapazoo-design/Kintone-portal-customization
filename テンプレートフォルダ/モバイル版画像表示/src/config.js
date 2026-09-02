@@ -22,6 +22,39 @@ export const CONFIG = {
 
   // MutationObserver の再走査をまとめる debounce（ms）。カーソル付与用。
   observeDebounceMs: 200,
+
+  // 開いた瞬間に画面幅いっぱいで表示するか。
+  // false にすると PhotoSwipe 既定の fit（はみ出さない収まり）に戻る緊急退避スイッチ。
+  fillWidthOnOpen: true,
+
+  // 画像の実ピクセルに対する引き伸ばし上限倍率。
+  // 低解像度サムネ（リッチテキストの約250px）を画面幅まで引き伸ばしてボケさせないための安全弁。
+  maxUpscale: 2,
+
+  // ダブルタップ時のズーム倍率（初期倍率の何倍か）。
+  // 初期倍率と一致するとダブルタップズームが無効化されるため必ず 1 より大きくする。
+  secondaryZoomFactor: 2,
+
+  // ピンチズームの上限（初期倍率の何倍か）。
+  maxZoomFactor: 4,
+
+  // ズーム上限の下限値（原寸比）。従来の maxZoomLevel: 4 相当を保証する。
+  minMaxZoomLevel: 4,
+
+  // 原寸URL（data-original等）を使う場合、読み込み完了まで実寸が分からないため、
+  // サムネのアスペクト比を流用して仮置きする幅（px）。
+  assumedOriginalWidth: 1600,
+
+  // 端末の戻るボタン／スワイプバックでビューアを閉じる（history.pushState連携）を有効にするか。
+  closeOnBackButton: true,
+
+  // history.pushState で積む state の目印キー。
+  // Kintone側や他カスタマイズの履歴と取り違えないために使う。
+  historyStateKey: '__kivViewer',
+
+  // history.back() 後に popstate が来なかった場合に、
+  // ロールバック中フラグを解除するまでの待ち時間（ms）。
+  historyRollbackTimeoutMs: 600,
 };
 
 // -----------------------------------------------------------------------------

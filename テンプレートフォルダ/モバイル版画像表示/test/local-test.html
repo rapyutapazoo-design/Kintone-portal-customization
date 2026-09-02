@@ -9,6 +9,21 @@
 </style>
 <script>window.__KIV_FORCE__ = true;</script>
 
+<!-- 履歴確認用の導線: ビューアを開くと history.length が +1、閉じると元に戻ることを目視確認する -->
+<div id="hist" style="font-size:12px;color:#666;border:1px dashed #999;padding:6px;margin-bottom:8px;"></div>
+<script>
+  (function () {
+    var out = document.getElementById('hist');
+    function render(label) {
+      out.textContent = '[' + (label || 'init') + '] history.length=' + history.length;
+    }
+    window.addEventListener('popstate', function () { render('popstate'); });
+    render('init');
+    // 定期的にも表示を更新（pushState/back の反映を見逃さないため）
+    setInterval(function () { render('poll'); }, 500);
+  })();
+</script>
+
 <div id="container">
   <div class="gaia-mobile-v2-portal-announcement-content block">
     <img class="ocean-attached-file gaia-ui-slideshow-thumbnail" alt="bulletin1"
@@ -17,6 +32,30 @@
     <img class="ocean-attached-file gaia-ui-slideshow-thumbnail" alt="bulletin2"
          src="https://picsum.photos/id/20/250/300?thumb"
          data-original="https://picsum.photos/id/20/1000/1200" width="250" />
+  </div>
+
+  <!-- 縦長・原寸ありケース: 幅フィット＋縦パン＋端まで送ると次スライドの確認 -->
+  <div class="gaia-mobile-v2-portal-announcement-content block">
+    <img class="ocean-attached-file gaia-ui-slideshow-thumbnail" alt="tall1"
+         src="https://picsum.photos/id/30/250/500?thumb"
+         data-original="https://picsum.photos/id/30/1000/2000" width="250" />
+    <img class="ocean-attached-file gaia-ui-slideshow-thumbnail" alt="tall2"
+         src="https://picsum.photos/id/31/250/500?thumb"
+         data-original="https://picsum.photos/id/31/1000/2000" width="250" />
+    <img class="ocean-attached-file gaia-ui-slideshow-thumbnail" alt="tall3"
+         src="https://picsum.photos/id/32/250/500?thumb"
+         data-original="https://picsum.photos/id/32/1000/2000" width="250" />
+  </div>
+
+  <!-- 低解像度・原寸なしケース（maxUpscaleの効きの確認）: 実寸250px・上限2倍で最大500px幅まで -->
+  <div class="control-value-gaia block">
+    <img class="user-token" alt="lowres"
+         src="https://picsum.photos/id/40/250/188" width="250" />
+  </div>
+
+  <!-- 極端に小さい画像（iconMinSize:56は超えるが小さい、例80x60）: 上限クランプが効くこと -->
+  <div class="control-value-gaia block">
+    <img class="user-token" alt="tiny" src="https://picsum.photos/id/50/80/60" width="80" />
   </div>
 </div>
 
