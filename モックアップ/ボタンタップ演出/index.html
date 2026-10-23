@@ -1,0 +1,597 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ボタンタップ演出モック</title>
+<style>
+/* =========================================================
+ * ページ全体（モックアップの外枠）
+ * ========================================================= */
+:root {
+    --page-bg: #eef1f5;
+    --panel-bg: #ffffff;
+    --text: #1a2027;
+    --text-sub: #5b6672;
+    --line: #dde2e8;
+    --accent: #154260;
+
+    /* ショートカットのテーマ（JSで上書き） */
+    --grad: linear-gradient(135deg, #154260 0%, #2b7bc0 100%);
+    --shadow: 0 4px 10px rgba(21, 66, 96, 0.4);
+    --base: #154260;
+    --radius: 30px;
+}
+* { box-sizing: border-box; }
+body {
+    margin: 0;
+    background: var(--page-bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", Meiryo, sans-serif;
+    line-height: 1.6;
+}
+.page { max-width: 1080px; margin: 0 auto; padding: 24px 16px 64px; }
+.page h1 { font-size: 22px; margin: 0 0 4px; }
+.page .lead { color: var(--text-sub); margin: 0 0 20px; font-size: 14px; }
+.page h2 { font-size: 17px; margin: 40px 0 12px; padding-left: 10px; border-left: 4px solid var(--accent); }
+
+/* 操作パネル */
+.controls {
+    display: flex; flex-wrap: wrap; gap: 16px 24px; align-items: center;
+    background: var(--panel-bg); border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px 16px; font-size: 13px;
+}
+.controls .group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.controls .label { color: var(--text-sub); font-weight: 600; }
+.seg { display: inline-flex; background: #eaeef2; border-radius: 9px; padding: 3px; gap: 3px; }
+.seg button {
+    border: 0; background: transparent; padding: 5px 10px; border-radius: 7px;
+    font: inherit; font-size: 12px; color: #3d4650; cursor: pointer;
+}
+.seg button[aria-pressed="true"] { background: #fff; color: var(--accent); font-weight: 700; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+.controls input[type="range"] { width: 120px; }
+.controls label.check { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+
+/* 比較エリア */
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 0 24px; margin-top: 20px; }
+/* 説明文の行数が違っても、左右のスマホ枠の高さをそろえる */
+.col { display: grid; grid-row: span 4; grid-template-rows: subgrid; margin-bottom: 24px; }
+.col h3 { font-size: 15px; margin: 0 0 4px; display: flex; align-items: center; gap: 8px; }
+.badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 700; }
+.badge.before { background: #fde8e7; color: #a92d2a; }
+.badge.after { background: #dff3e6; color: #1d6b3a; }
+.col .note { font-size: 12px; color: var(--text-sub); margin: 0 0 12px; }
+.col ul { font-size: 13px; padding-left: 20px; margin: 12px 0 0; }
+.col li { margin-bottom: 4px; }
+
+/* =========================================================
+ * スマホ枠（kintoneモバイル版ポータル風）
+ * ========================================================= */
+.phone {
+    width: 100%; max-width: 360px; height: 640px; margin: 0 auto;
+    border-radius: 36px; background: #1c1f24; padding: 10px;
+    box-shadow: 0 12px 30px rgba(0,0,0,.18);
+}
+.screen {
+    position: relative; height: 100%; border-radius: 28px; overflow: hidden;
+    background: #f3f4f6; display: flex; flex-direction: column;
+}
+.k-header {
+    flex: none; height: 48px; background: #fff; border-bottom: 1px solid #e3e6ea;
+    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px;
+}
+.k-scroll { flex: 1; overflow-y: auto; padding: 12px 12px 96px; -webkit-overflow-scrolling: touch; }
+.k-card { background: #fff; border-radius: 8px; padding: 12px; margin-bottom: 12px; border: 1px solid #e6e9ed; }
+.k-card-title { font-size: 12px; font-weight: 700; color: #5b6672; margin-bottom: 8px; }
+
+/* ポータルカスタマイズのコンテナ（portal-shortcut.js の PortalCustomize 相当） */
+.pc-row { display: flex; align-items: center; margin-bottom: 10px; }
+.pc-shortcuts { display: flex; flex-wrap: wrap; gap: 10px; }
+.pc-config { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
+
+.k-list-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid #f0f2f4; font-size: 13px; }
+.k-list-item:first-of-type { border-top: 0; }
+.k-dot { width: 28px; height: 28px; border-radius: 6px; background: #dbe9f5; flex: none; }
+.k-line { height: 8px; border-radius: 4px; background: #e9ecef; margin: 6px 0; }
+
+/* 模擬遷移のトースト */
+.toast {
+    position: absolute; left: 50%; bottom: 84px; transform: translate(-50%, 8px);
+    background: rgba(26,32,39,.88); color: #fff; font-size: 12px; padding: 7px 12px;
+    border-radius: 999px; white-space: nowrap; opacity: 0; pointer-events: none;
+    transition: opacity .2s, transform .2s; z-index: 10000;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* =========================================================
+ * 共通：ボタンの基本形（現状コードのインライン style と同じ値）
+ * ========================================================= */
+.btn-shortcut {
+    box-sizing: border-box; display: flex; justify-content: center; align-items: center;
+    width: calc(50% - 5px); min-height: 48px; padding: 10px 5px;
+    color: #fff; border: none; text-decoration: none; font-weight: bold; font-size: 13px;
+    letter-spacing: .5px; text-align: center; line-height: 1.3;
+    text-shadow: 0 1px 2px rgba(0,0,0,.2);
+    background: var(--grad); box-shadow: var(--shadow); border-radius: var(--radius);
+}
+.btn-inquiry {
+    margin-left: auto; box-sizing: border-box; display: inline-flex; justify-content: center; align-items: center;
+    white-space: nowrap; padding: 10px 16px; border-radius: 20px;
+    background: linear-gradient(135deg, #d9534f 0%, #a92d2a 100%);
+    color: #fff; border: none; font-weight: bold; font-size: 13px; letter-spacing: .5px;
+    text-decoration: none; text-shadow: 0 1px 2px rgba(0,0,0,.2);
+    box-shadow: 0 4px 10px rgba(169, 45, 42, .4);
+}
+.btn-config {
+    background: #fff; border: 1px solid #ddd; border-radius: 50%; cursor: pointer;
+    font-size: 14px; width: 32px; height: 32px; padding: 0;
+    display: flex; justify-content: center; align-items: center;
+    box-shadow: 0 2px 5px rgba(0,0,0,.1);
+}
+.btn-home {
+    position: absolute; bottom: 16px; left: calc(50% - 28px);
+    width: 56px; height: 56px; border-radius: 50%;
+    background: linear-gradient(135deg, #2b7bc0 0%, #154260 100%);
+    display: flex; justify-content: center; align-items: center;
+    box-shadow: 0 4px 12px rgba(21, 66, 96, .4); z-index: 9999;
+}
+
+/* =========================================================
+ * 【現状】の再現
+ *   - タップ時ハイライト・フォーカス枠はブラウザ既定のまま
+ *   - transition: all 0.3s / ホバー表現は JS の mouseover で付与
+ * ========================================================= */
+.before .btn-shortcut,
+.before .btn-inquiry { transition: all .3s ease; }
+.before .btn-config { transition: background .2s; }
+.before .btn-home { transition: transform .1s ease; }
+
+/* PC で見たときに「タップ時の水色の箱」を疑似表示するレイヤー */
+.tap-highlight-sim {
+    position: absolute; pointer-events: none; z-index: 10001;
+    background: rgba(102, 183, 255, .38); opacity: 0; transition: opacity .15s;
+}
+.tap-highlight-sim.show { opacity: 1; transition: none; }
+
+/* =========================================================
+ * 【改善案】仕様 B-2
+ * ========================================================= */
+.kc-press {
+    /* A. 水色・青の表示を抑止 */
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    touch-action: manipulation;
+
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+    cursor: pointer;
+
+    /* 離したときは少し跳ね返って戻る */
+    transition:
+        scale 250ms cubic-bezier(.34, 1.56, .64, 1),
+        translate 150ms ease,
+        filter 150ms ease,
+        box-shadow 150ms ease,
+        background-color 150ms ease;
+}
+/* 押した瞬間：すばやく沈む */
+.kc-press.is-pressed {
+    scale: .96;
+    filter: brightness(.92);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .25);
+    transition-duration: 80ms;
+    transition-timing-function: ease-out;
+}
+.kc-press.btn-config.is-pressed { background-color: #eef1f4; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+
+/* 遷移中：沈んだまま保持（＋任意で光が流れる） */
+.kc-press.is-navigating {
+    scale: .97;
+    filter: brightness(.95);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, .2);
+}
+.after.with-shimmer .kc-press.is-navigating::after {
+    content: "";
+    position: absolute; inset: 0; z-index: 1; pointer-events: none;
+    background: linear-gradient(100deg, transparent 20%, rgba(255, 255, 255, .38) 50%, transparent 80%);
+    transform: translateX(-100%);
+    animation: kc-shimmer 1.2s ease-in-out infinite;
+}
+@keyframes kc-shimmer { to { transform: translateX(100%); } }
+
+/* フォーカス：タップでは出さず、キーボード操作のときだけ表示 */
+.kc-press:focus:not(:focus-visible) { outline: none; }
+.kc-press:focus-visible,
+.kc-press.force-focus {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px var(--base);
+}
+.kc-press.btn-inquiry:focus-visible,
+.kc-press.btn-inquiry.force-focus { box-shadow: 0 0 0 4px #a92d2a; }
+
+/* ホバー：PC（マウス操作）のときだけ */
+@media (hover: hover) and (pointer: fine) {
+    .kc-press.btn-shortcut:hover:not(.is-pressed):not(.is-navigating),
+    .kc-press.btn-inquiry:hover:not(.is-pressed):not(.is-navigating) {
+        translate: 0 -3px;
+        filter: brightness(1.1);
+    }
+    .kc-press.btn-home:hover:not(.is-pressed):not(.is-navigating) { filter: brightness(1.1); }
+    .kc-press.btn-config:hover:not(.is-pressed) { background-color: #f2f5f8; }
+}
+
+/* 動きを減らす設定：拡大縮小・光をやめ、明るさの変化だけにする */
+.after.reduce-motion .kc-press { scale: none !important; translate: none !important; transition: filter 150ms ease, background-color 150ms ease; }
+.after.reduce-motion .kc-press::after { display: none !important; }
+@media (prefers-reduced-motion: reduce) {
+    .kc-press { scale: none !important; translate: none !important; transition: filter 150ms ease, background-color 150ms ease; }
+    .kc-press::after { display: none !important; }
+}
+
+/* =========================================================
+ * 状態ギャラリー・仕様表
+ * ========================================================= */
+.gallery {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;
+    background: var(--panel-bg); border: 1px solid var(--line); border-radius: 12px; padding: 20px 16px;
+}
+.gallery .cell { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+.gallery .cell .btn-shortcut { width: 160px; }
+.gallery .cell .cap { font-size: 12px; color: var(--text-sub); }
+.gallery .cell .cap b { display: block; color: var(--text); font-size: 13px; }
+
+.spec { width: 100%; border-collapse: collapse; background: var(--panel-bg); border-radius: 12px; overflow: hidden; font-size: 13px; }
+.spec th, .spec td { padding: 9px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.spec th { background: #f6f8fa; font-weight: 700; white-space: nowrap; }
+.spec code { font-size: 12px; background: #f1f3f5; padding: 1px 5px; border-radius: 4px; }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; }
+
+@media (max-width: 480px) {
+    .phone { height: 600px; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+    <h1>ボタンタップ演出 モックアップ</h1>
+    <p class="lead">全体カスタマイズのホーム・ショートカット・問い合わせ・設定ボタンについて、現状と改善案（仕様 B-2）を並べて比較します。リンクは実際には遷移せず、指定した待ち時間のあとに「移動しました」と表示します。</p>
+    <p class="lead"><a href="candidates.html" style="color:var(--accent)">→ ほかのデザイン候補（5案）を見る</a></p>
+
+    <div class="controls">
+        <div class="group">
+            <span class="label">テーマ</span>
+            <div class="seg" id="ctl-theme"></div>
+        </div>
+        <div class="group">
+            <span class="label">形</span>
+            <div class="seg" id="ctl-shape"></div>
+        </div>
+        <div class="group">
+            <span class="label">遷移の待ち時間</span>
+            <input type="range" id="ctl-delay" min="300" max="2500" step="100" value="1200">
+            <span id="ctl-delay-val">1.2秒</span>
+        </div>
+        <div class="group">
+            <label class="check"><input type="checkbox" id="ctl-shimmer" checked> 遷移中に光を流す</label>
+            <label class="check"><input type="checkbox" id="ctl-reduce"> 動きを減らす設定を再現</label>
+        </div>
+    </div>
+
+    <div class="compare">
+        <!-- 現状 -->
+        <div class="col">
+            <h3><span class="badge before">現状</span>今のコードの挙動</h3>
+            <p class="note">PC では、タップ時の水色の箱を疑似的に重ねて表示します。スマホ実機では端末本来の表示になります。</p>
+            <div class="phone">
+                <div class="screen before" id="frame-before"></div>
+            </div>
+            <ul>
+                <li>押すと、角丸を無視した四角い水色の箱が重なる</li>
+                <li>タップ後に、ボタンが浮いたまま残る（スマホではホバーが解除されない）</li>
+                <li>離したあと、遷移するまで何も変化がない</li>
+                <li>ホームボタンはスクロールに移ると縮んだまま残ることがある</li>
+            </ul>
+        </div>
+        <!-- 改善案 -->
+        <div class="col">
+            <h3><span class="badge after">改善案</span>仕様 B-2</h3>
+            <p class="note">押すと沈み、離すと「受け付けた」状態のまま遷移を待ちます。ボタンの上から指を動かしてスクロールすると、すぐ元に戻ります。</p>
+            <div class="phone">
+                <div class="screen after with-shimmer" id="frame-after"></div>
+            </div>
+            <ul>
+                <li>水色の箱・フォーカス枠・長押しの文字選択を出さない</li>
+                <li>押した瞬間に 0.96 倍へ沈む（最低 120ms は表示を保つ）</li>
+                <li>遷移中は沈んだ状態を保ち、光が流れて読み込み中を伝える</li>
+                <li>🎨🔲 のようにその場で完結するボタンは、少し跳ね返って戻る</li>
+            </ul>
+        </div>
+    </div>
+
+    <h2>状態ごとの見た目（改善案）</h2>
+    <div class="gallery after with-shimmer" id="gallery">
+        <div class="cell">
+            <a class="btn-shortcut kc-press" href="#" tabindex="-1">日報</a>
+            <div class="cap"><b>通常</b>テーマ・形の設定どおり</div>
+        </div>
+        <div class="cell">
+            <a class="btn-shortcut kc-press is-pressed" href="#" tabindex="-1">日報</a>
+            <div class="cap"><b>押している間</b>0.96倍・明るさ0.92・影を浅く</div>
+        </div>
+        <div class="cell">
+            <a class="btn-shortcut kc-press is-navigating" href="#" tabindex="-1">日報</a>
+            <div class="cap"><b>遷移中</b>0.97倍のまま保持＋光が流れる</div>
+        </div>
+        <div class="cell">
+            <a class="btn-shortcut kc-press force-focus" href="#" tabindex="-1">日報</a>
+            <div class="cap"><b>キーボードで選択</b>白い枠＋テーマ色の外枠</div>
+        </div>
+    </div>
+
+    <h2>仕様のまとめ</h2>
+    <div class="table-wrap">
+        <table class="spec">
+            <tr><th>水色の箱</th><td><code>-webkit-tap-highlight-color: transparent</code>。Chrome・Android アプリ（WebView）・iPhone（WKWebView）のすべてに効く</td></tr>
+            <tr><th>フォーカス枠</th><td><code>:focus:not(:focus-visible)</code> で枠を消し、キーボード操作のときだけ表示</td></tr>
+            <tr><th>長押し</th><td><code>user-select: none</code> と <code>-webkit-touch-callout: none</code> で、文字選択とリンクのプレビューを出さない</td></tr>
+            <tr><th>反応速度</th><td><code>touch-action: manipulation</code> でダブルタップ拡大の待ちをなくす</td></tr>
+            <tr><th>押下</th><td>JS（pointerdown）で <code>is-pressed</code> を付与。80ms で沈み、最低 120ms は表示を保つ</td></tr>
+            <tr><th>遷移中</th><td>click で <code>is-navigating</code> に切り替え、画面が移るまで保持。戻るボタンで戻ったとき（pageshow）は解除</td></tr>
+            <tr><th>キャンセル</th><td>pointercancel・pointerleave（スクロールし始めた、指がボタンの外に出た）ですぐ解除</td></tr>
+            <tr><th>ホバー</th><td><code>@media (hover: hover) and (pointer: fine)</code> のときだけ浮かせる（PC 限定）</td></tr>
+            <tr><th>動きを減らす設定</th><td><code>prefers-reduced-motion</code> のときは拡大縮小と光をやめ、明るさの変化だけにする</td></tr>
+            <tr><th>ホームボタン</th><td>中央寄せを <code>left: calc(50% - 28px)</code> にし、<code>transform</code> を拡大縮小と取り合わないようにする</td></tr>
+        </table>
+    </div>
+</div>
+
+<!-- スマホ画面の中身（両方の枠に複製して使う） -->
+<template id="screen-template">
+    <div class="k-header">ポータル</div>
+    <div class="k-scroll">
+        <div class="k-card">
+            <div class="pc-row">
+                <a class="btn-inquiry" href="/k/0/" data-nav="お問い合わせ">📩 お問い合わせ（デジタル委員会宛て）</a>
+            </div>
+            <div class="pc-shortcuts">
+                <a class="btn-shortcut" href="/k/1/" data-nav="日報">日報</a>
+                <a class="btn-shortcut" href="/k/2/" data-nav="案件管理">案件管理</a>
+                <a class="btn-shortcut" href="/k/3/" data-nav="勤怠">勤怠</a>
+                <a class="btn-shortcut" href="/k/4/" data-nav="備品予約">備品予約</a>
+                <a class="btn-shortcut" href="/k/m/space/1" data-nav="社内スペース">社内スペース</a>
+                <a class="btn-shortcut" href="/k/5/" data-nav="経費精算">経費精算</a>
+            </div>
+            <div class="pc-config">
+                <button class="btn-config" type="button" title="色を変更" data-action="theme">🎨</button>
+                <button class="btn-config" type="button" title="形を変更" data-action="shape">🔲</button>
+                <button class="btn-config" type="button" title="ショートカットを編集" data-action="settings">⚙️</button>
+            </div>
+        </div>
+        <div class="k-card">
+            <div class="k-card-title">お知らせ</div>
+            <div class="k-line" style="width:90%"></div>
+            <div class="k-line" style="width:75%"></div>
+            <div class="k-line" style="width:82%"></div>
+        </div>
+        <div class="k-card">
+            <div class="k-card-title">アプリ</div>
+            <div class="k-list-item"><span class="k-dot"></span>顧客リスト</div>
+            <div class="k-list-item"><span class="k-dot"></span>問い合わせ管理</div>
+            <div class="k-list-item"><span class="k-dot"></span>議事録</div>
+            <div class="k-list-item"><span class="k-dot"></span>研修申込</div>
+        </div>
+    </div>
+    <a class="btn-home" href="/k/m/" data-nav="ホーム" aria-label="ホーム">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M10 20V14H14V20H19V12H22L12 3L2 12H5V20H10Z" fill="white"/>
+        </svg>
+    </a>
+    <div class="toast"></div>
+</template>
+
+<script>
+(function () {
+    'use strict';
+
+    // portal-shortcut.js の THEMES / SHAPES と同じ値
+    var THEMES = [
+        { label: 'ネイビー', grad: 'linear-gradient(135deg, #154260 0%, #2b7bc0 100%)', shadow: '0 4px 10px rgba(21, 66, 96, 0.4)', base: '#154260' },
+        { label: 'グリーン', grad: 'linear-gradient(135deg, #134E5E 0%, #71B280 100%)', shadow: '0 4px 10px rgba(19, 78, 94, 0.4)', base: '#134E5E' },
+        { label: 'パープル', grad: 'linear-gradient(135deg, #4b134f 0%, #c94b4b 100%)', shadow: '0 4px 10px rgba(75, 19, 79, 0.4)', base: '#4b134f' },
+        { label: '標準', grad: '#3498db', shadow: '0 4px 10px rgba(52, 152, 219, 0.4)', base: '#2d80b8' }
+    ];
+    var SHAPES = [
+        { label: 'カプセル', radius: '30px' },
+        { label: '角丸', radius: '8px' }
+    ];
+    var MIN_PRESS_MS = 120;
+
+    var state = { theme: 0, shape: 0, delay: 1200 };
+
+    var frameBefore = document.getElementById('frame-before');
+    var frameAfter = document.getElementById('frame-after');
+    var tpl = document.getElementById('screen-template');
+    frameBefore.appendChild(tpl.content.cloneNode(true));
+    frameAfter.appendChild(tpl.content.cloneNode(true));
+
+    // --- 操作パネル ---
+    function buildSeg(el, items, key) {
+        items.forEach(function (item, i) {
+            var b = document.createElement('button');
+            b.type = 'button';
+            b.textContent = item.label;
+            b.onclick = function () { state[key] = i; applyTheme(); };
+            el.appendChild(b);
+        });
+    }
+    buildSeg(document.getElementById('ctl-theme'), THEMES, 'theme');
+    buildSeg(document.getElementById('ctl-shape'), SHAPES, 'shape');
+
+    function applyTheme() {
+        var t = THEMES[state.theme];
+        var root = document.documentElement.style;
+        root.setProperty('--grad', t.grad);
+        root.setProperty('--shadow', t.shadow);
+        root.setProperty('--base', t.base);
+        root.setProperty('--radius', SHAPES[state.shape].radius);
+        markSeg('ctl-theme', state.theme);
+        markSeg('ctl-shape', state.shape);
+    }
+    function markSeg(id, idx) {
+        var bs = document.getElementById(id).children;
+        for (var i = 0; i < bs.length; i++) bs[i].setAttribute('aria-pressed', i === idx ? 'true' : 'false');
+    }
+    applyTheme();
+
+    var delayInput = document.getElementById('ctl-delay');
+    var delayVal = document.getElementById('ctl-delay-val');
+    delayInput.oninput = function () {
+        state.delay = Number(delayInput.value);
+        delayVal.textContent = (state.delay / 1000).toFixed(1) + '秒';
+    };
+    document.getElementById('ctl-shimmer').onchange = function (e) {
+        frameAfter.classList.toggle('with-shimmer', e.target.checked);
+        document.getElementById('gallery').classList.toggle('with-shimmer', e.target.checked);
+    };
+    document.getElementById('ctl-reduce').onchange = function (e) {
+        frameAfter.classList.toggle('reduce-motion', e.target.checked);
+        document.getElementById('gallery').classList.toggle('reduce-motion', e.target.checked);
+    };
+
+    // --- 共通：トースト・設定ボタンの動作 ---
+    function showToast(frame, text) {
+        var t = frame.querySelector('.toast');
+        t.textContent = text;
+        t.classList.add('show');
+        clearTimeout(t._timer);
+        t._timer = setTimeout(function () { t.classList.remove('show'); }, 1400);
+    }
+    function runConfigAction(frame, action) {
+        if (action === 'theme') { state.theme = (state.theme + 1) % THEMES.length; applyTheme(); }
+        if (action === 'shape') { state.shape = (state.shape + 1) % SHAPES.length; applyTheme(); }
+        if (action === 'settings') showToast(frame, '設定モーダルを開く（モック対象外）');
+    }
+
+    /* =====================================================
+     * 現状の再現（今のコードと同じ処理）
+     * ===================================================== */
+    (function setupBefore(frame) {
+        var hl = document.createElement('div');
+        hl.className = 'tap-highlight-sim';
+        frame.appendChild(hl);
+        var stuck = null; // スマホで「浮いたまま残る」ボタン
+
+        // PC ではタップ時ハイライトが出ないため、水色の箱を疑似的に重ねる（四角い枠全体）
+        frame.addEventListener('pointerdown', function (e) {
+            if (stuck && !stuck.contains(e.target)) { clearHover(stuck); stuck = null; }
+            var target = e.target.closest('a, button');
+            if (!target || e.pointerType === 'touch') return;
+            var fr = frame.getBoundingClientRect();
+            var r = target.getBoundingClientRect();
+            hl.style.left = (r.left - fr.left) + 'px';
+            hl.style.top = (r.top - fr.top) + 'px';
+            hl.style.width = r.width + 'px';
+            hl.style.height = r.height + 'px';
+            hl.classList.add('show');
+        });
+        ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (ev) {
+            frame.addEventListener(ev, function () { hl.classList.remove('show'); });
+        });
+
+        function setHover(el) { el.style.transform = 'translateY(-3px)'; el.style.filter = 'brightness(1.1)'; }
+        function clearHover(el) { el.style.transform = 'translateY(0)'; el.style.filter = 'brightness(1)'; }
+
+        // ショートカット・問い合わせ：mouseover / mouseout でホバー表現（現状コードと同じ）
+        frame.querySelectorAll('.btn-shortcut, .btn-inquiry').forEach(function (el) {
+            el.onmouseover = function () { setHover(el); };
+            el.onmouseout = function () { if (stuck !== el) clearHover(el); };
+        });
+
+        // 設定ボタン
+        frame.querySelectorAll('.btn-config').forEach(function (el) {
+            el.onmouseover = function () { el.style.background = '#f9f9f9'; };
+            el.onmouseout = function () { el.style.background = '#fff'; };
+            el.onclick = function () { runConfigAction(frame, el.dataset.action); };
+        });
+
+        // ホームボタン：touchstart / touchend のみ（touchcancel 未対応）
+        var home = frame.querySelector('.btn-home');
+        home.ontouchstart = function () { home.style.transform = 'scale(0.95)'; };
+        home.ontouchend = function () { home.style.transform = 'scale(1)'; };
+
+        // 遷移（模擬）：離した直後から待ち時間の間、ボタンには何も変化がない
+        frame.querySelectorAll('[data-nav]').forEach(function (el) {
+            el.addEventListener('click', function (e) {
+                e.preventDefault();
+                // スマホではホバー表現が解除されずに残るため、それを再現する
+                if (el.classList.contains('btn-shortcut') || el.classList.contains('btn-inquiry')) {
+                    if (stuck && stuck !== el) clearHover(stuck);
+                    stuck = el;
+                    setHover(el);
+                }
+                setTimeout(function () { showToast(frame, '「' + el.dataset.nav + '」へ移動しました（模擬）'); }, state.delay);
+            });
+        });
+    })(frameBefore);
+
+    /* =====================================================
+     * 改善案（仕様 B-2）：押下状態コントローラー
+     * ===================================================== */
+    (function setupAfter(frame) {
+        var buttons = frame.querySelectorAll('.btn-shortcut, .btn-inquiry, .btn-config, .btn-home');
+
+        buttons.forEach(function (el) {
+            el.classList.add('kc-press');
+            var downAt = 0;
+            var timer = null;
+            var isLink = el.hasAttribute('data-nav');
+
+            function remaining() { return Math.max(0, MIN_PRESS_MS - (Date.now() - downAt)); }
+            function cancel() {
+                clearTimeout(timer);
+                el.classList.remove('is-pressed');
+            }
+
+            el.addEventListener('pointerdown', function (e) {
+                if (e.button !== 0 || el.classList.contains('is-navigating')) return;
+                clearTimeout(timer);
+                downAt = Date.now();
+                el.classList.add('is-pressed');
+            });
+            // スクロールし始めた／指がボタンの外へ出た → すぐ解除
+            el.addEventListener('pointercancel', cancel);
+            el.addEventListener('pointerleave', function () { if (el.classList.contains('is-pressed')) cancel(); });
+
+            // その場で完結するボタン：最低表示時間を保ってから跳ね返って戻る
+            el.addEventListener('pointerup', function () {
+                if (isLink || !el.classList.contains('is-pressed')) return;
+                timer = setTimeout(function () { el.classList.remove('is-pressed'); }, remaining());
+            });
+
+            el.addEventListener('click', function (e) {
+                if (!isLink) { runConfigAction(frame, el.dataset.action); return; }
+                e.preventDefault();
+                if (el.classList.contains('is-navigating')) return;
+                // キーボード操作（pointerdown なし）のときは即座に遷移中へ
+                var wait = el.classList.contains('is-pressed') ? remaining() : 0;
+                clearTimeout(timer);
+                timer = setTimeout(function () {
+                    el.classList.remove('is-pressed');
+                    el.classList.add('is-navigating');
+                    // 実装では location.href 代入。ここでは待ち時間後に「戻ってきた」想定で解除（pageshow 相当）
+                    setTimeout(function () {
+                        el.classList.remove('is-navigating');
+                        showToast(frame, '「' + el.dataset.nav + '」へ移動しました（模擬）');
+                    }, state.delay);
+                }, wait);
+            });
+        });
+    })(frameAfter);
+})();
+</script>
+</body>
+</html>
