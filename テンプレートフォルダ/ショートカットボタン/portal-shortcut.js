@@ -22,6 +22,12 @@
  *   ポータル上部の ⚙️ ボタンから、ショートカットの遷移先・表示名・並び順・個数を
  *   ユーザー本人が編集できる。設定は localStorage にログインユーザー単位でキャッシュされ、
  *   未設定時は appList（管理者既定値）を表示する。
+ *   遷移先はアプリに加えスペースも登録できる（select 内で <optgroup> により混在提示）。
+ *   スペース候補は /k/v1/apps.json の各アプリが持つ spaceId をユニーク化して取得するほか
+ *   （アプリを1つも持たないスペースは候補に出ないため）、スペースのURLまたはIDを貼り付けて
+ *   候補に追加することもできる。設定スキーマは v2（{type, targetId, targetName, label,
+ *   labelCustom}）で、v1形式（{appId, appName, label, labelCustom}）のデータは読み込み時に
+ *   自動的に v2 形へ移行され、保存は常に v2 で行われる。
  *
  * 【端末間同期（任意）】
  *   別途用意した「設定アプリ」（フィールド: login_name / settings_json）を使い、
@@ -55,7 +61,13 @@
     // --- 個人カスタマイズ 用 定数 ---
     var MIN_SHORTCUTS = 4;
     var MAX_SHORTCUTS = 6;
-    var SETTINGS_SCHEMA_VERSION = 1;
+    var SETTINGS_SCHEMA_VERSION = 2;
+    var SETTINGS_SCHEMA_VERSION_LEGACY = 1; // v1 読み込み許容用（読み込み時に自動移行する）
+    var TARGET_TYPE_APP = 'app';
+    var TARGET_TYPE_SPACE = 'space';
+    var SPACE_ID_PATTERN = /\/space\/(\d+)/;
+    var SPACE_FETCH_CONCURRENCY = 5;
+    var SPACE_FETCH_MAX = 60;
     var STORAGE_KEY_PREFIX = 'kintone_portal_shortcuts';
     var STORAGE_KEY_FALLBACK = 'kintone_portal_shortcuts_default';
     var BTN_MARKER_ATTR = 'data-shortcut-btn'; // ショートカットボタン再描画時の削除対象マーカー（data-shortcut-renderedとは別物）
@@ -225,21 +237,42 @@
     }
 
     function defaultShortcutList() {
-        // appList（管理者既定値）を保存データと同じ形へ変換する
+        // appList（管理者既定値）を保存データと同じ形（v2）へ変換する
         return appList.map(function (app) {
-            return { appId: String(app.id), appName: app.name, label: app.name, labelCustom: false };
+            return { type: TARGET_TYPE_APP, targetId: String(app.id), targetName: app.name, label: app.name, labelCustom: false };
         });
     }
 
     function isValidSavedItem(item) {
         return !!item && typeof item === 'object' &&
-            typeof item.appId === 'string' && item.appId.length > 0;
+            (item.type === TARGET_TYPE_APP || item.type === TARGET_TYPE_SPACE) &&
+            typeof item.targetId === 'string' && item.targetId.length > 0;
+    }
+
+    /**
+     * v1形式（{appId, appName, label, labelCustom}）の要素を v2形式へ変換する。
+     * appId が文字列でない/空の場合は全体を無効化するため null を返す。
+     */
+    function migrateLegacyItem(item) {
+        if (!item || typeof item !== 'object') return null;
+        var appId = item.appId;
+        if (typeof appId !== 'string' || !appId.length) return null;
+        var appName = (typeof item.appName === 'string') ? item.appName : '';
+        var label = (typeof item.label === 'string' && item.label) ? item.label : (appName || appId);
+        return {
+            type: TARGET_TYPE_APP,
+            targetId: appId,
+            targetName: appName,
+            label: label,
+            labelCustom: !!item.labelCustom
+        };
     }
 
     /**
      * 設定JSON文字列をパース・バリデーションする。以下はすべて null（無効）とする:
-     * 値なし / JSONパース失敗 / 配列でない / 要素数が範囲外 / アプリIDが空 / スキーマ不明。
+     * 値なし / JSONパース失敗 / 配列でない / 要素数が範囲外 / 要素が不正 / スキーマ不明。
      * localStorage から読む場合・リモート（設定アプリ）から読む場合の両方で共用する。
+     * v1（SETTINGS_SCHEMA_VERSION_LEGACY）データは読み込み時に自動的に v2 形へ移行する。
      */
     function parseSettingsJson(raw) {
         if (!raw) return null;
@@ -251,19 +284,26 @@
             return null;
         }
         if (!parsed || typeof parsed !== 'object') return null;
-        if (parsed.version !== SETTINGS_SCHEMA_VERSION) return null;
+        var ver = parsed.version;
+        if (ver !== SETTINGS_SCHEMA_VERSION && ver !== SETTINGS_SCHEMA_VERSION_LEGACY) return null;
         if (!Array.isArray(parsed.buttons)) return null;
         if (parsed.buttons.length < MIN_SHORTCUTS || parsed.buttons.length > MAX_SHORTCUTS) return null;
 
+        var isLegacy = (ver === SETTINGS_SCHEMA_VERSION_LEGACY);
         var normalized = [];
         for (var i = 0; i < parsed.buttons.length; i++) {
             var item = parsed.buttons[i];
+            if (isLegacy) {
+                item = migrateLegacyItem(item);
+                if (!item) return null;
+            }
             if (!isValidSavedItem(item)) return null;
-            var appName = (typeof item.appName === 'string') ? item.appName : '';
-            var label = (typeof item.label === 'string' && item.label) ? item.label : (appName || item.appId);
+            var targetName = (typeof item.targetName === 'string') ? item.targetName : '';
+            var label = (typeof item.label === 'string' && item.label) ? item.label : (targetName || item.targetId);
             normalized.push({
-                appId: String(item.appId),
-                appName: appName,
+                type: item.type,
+                targetId: String(item.targetId),
+                targetName: targetName,
                 label: label,
                 labelCustom: !!item.labelCustom
             });
@@ -292,20 +332,21 @@
         }
         for (var i = 0; i < list.length; i++) {
             if (!isValidSavedItem(list[i])) {
-                throw new Error('アプリが選択されていない行があります。');
+                throw new Error('遷移先（アプリ／スペース）が選択されていない行があります。');
             }
         }
     }
 
-    /** localStorage 保存 / リモート保存の両方で使う、共通スキーマのペイロードを組み立てる。 */
+    /** localStorage 保存 / リモート保存の両方で使う、共通スキーマ（v2）のペイロードを組み立てる。 */
     function buildSettingsPayload(list) {
         return {
             version: SETTINGS_SCHEMA_VERSION,
             buttons: list.map(function (item) {
                 return {
-                    appId: item.appId,
-                    appName: item.appName || '',
-                    label: item.label || item.appName || item.appId,
+                    type: item.type || TARGET_TYPE_APP,
+                    targetId: item.targetId,
+                    targetName: item.targetName || '',
+                    label: item.label || item.targetName || item.targetId,
                     labelCustom: !!item.labelCustom
                 };
             })
@@ -515,7 +556,11 @@
                 .then(function (resp) {
                     var apps = (resp && resp.apps) ? resp.apps : [];
                     for (var i = 0; i < apps.length; i++) {
-                        results.push({ id: String(apps[i].appId), name: apps[i].name });
+                        results.push({
+                            id: String(apps[i].appId),
+                            name: apps[i].name,
+                            spaceId: (apps[i].spaceId != null ? String(apps[i].spaceId) : null)
+                        });
                     }
                     if (apps.length === limit && loopCount < maxLoops) {
                         offset += limit;
@@ -535,6 +580,113 @@
                 });
         }
         fetchPage();
+    }
+
+    // ============================================================
+    // 個人カスタマイズ: スペース候補取得（B: apps.jsonのspaceId由来 ／ C: URL/ID貼り付け）
+    // ============================================================
+    var spaceListCache = null; // セッション内キャッシュ（モーダル再オープン時の再取得を避ける）
+    var spaceNameCache = {};   // spaceId -> name（fetchSpaceById 成功時に随時更新）
+
+    /**
+     * スペースIDを指定して1件取得する（C: URL/ID貼り付け経路、および fetchAllSpaces から共用）。
+     * 成功時は {id, name} を渡す。失敗（403/404含む）は console.error のみで onFail を呼ぶ。
+     */
+    function fetchSpaceById(spaceId, onSuccess, onFail) {
+        kintone.api(kintone.api.url('/k/v1/space.json', true), 'GET', { id: spaceId })
+            .then(function (resp) {
+                var space = { id: String(spaceId), name: (resp && resp.name) ? resp.name : String(spaceId) };
+                spaceNameCache[space.id] = space.name;
+                onSuccess(space);
+            })
+            .catch(function (err) {
+                console.error('portal-shortcut: スペース情報の取得に失敗しました。', spaceId, err);
+                if (onFail) onFail(err);
+            });
+    }
+
+    /**
+     * apps.json の spaceId をユニーク化し、各IDについて1回ずつ /k/v1/space.json を呼んで
+     * スペース候補一覧を作る（B: 主軸）。403/404 等の失敗は静かに除外する。
+     * appListCache が null、または spaceId を持つアプリが1つもない場合は空配列で onDone を呼ぶ。
+     * エラーコールバックは持たない（このAPI自体はユーザーへエラー表示しない）。
+     */
+    function fetchAllSpaces(onDone) {
+        if (spaceListCache) {
+            onDone(spaceListCache);
+            return;
+        }
+        if (!appListCache || !appListCache.length) {
+            onDone([]);
+            return;
+        }
+
+        var seen = {};
+        var ids = [];
+        for (var i = 0; i < appListCache.length; i++) {
+            var sid = appListCache[i].spaceId;
+            if (sid && !seen[sid]) {
+                seen[sid] = true;
+                ids.push(sid);
+            }
+        }
+        if (!ids.length) {
+            onDone([]);
+            return;
+        }
+        if (ids.length > SPACE_FETCH_MAX) {
+            console.warn('portal-shortcut: スペース候補数が上限を超えたため切り詰めます。', ids.length, '>', SPACE_FETCH_MAX);
+            ids = ids.slice(0, SPACE_FETCH_MAX);
+        }
+
+        var results = [];
+        var nextIndex = 0;
+        var remaining = ids.length;
+        var workerCount = Math.min(SPACE_FETCH_CONCURRENCY, ids.length);
+
+        function finishOne() {
+            remaining--;
+            if (remaining <= 0) {
+                results.sort(function (a, b) {
+                    return a.name.localeCompare(b.name, 'ja');
+                });
+                spaceListCache = results;
+                onDone(results);
+            }
+        }
+
+        function worker() {
+            if (nextIndex >= ids.length) return;
+            var id = ids[nextIndex++];
+            fetchSpaceById(id, function (space) {
+                results.push(space);
+                finishOne();
+                worker();
+            }, function () {
+                // 失敗は静かに除外する
+                finishOne();
+                worker();
+            });
+        }
+
+        for (var w = 0; w < workerCount; w++) {
+            worker();
+        }
+    }
+
+    /**
+     * スペースURL または スペースID の入力文字列からスペースIDを抽出する。
+     * 数字のみならそれをそのまま、URLなら SPACE_ID_PATTERN でマッチした部分を返す。
+     * どちらでもなければ null。
+     */
+    function extractSpaceIdFromInput(raw) {
+        if (typeof raw !== 'string') return null;
+        var trimmed = raw.trim();
+        if (!trimmed) return null;
+        if (/^[0-9]+$/.test(trimmed)) return trimmed;
+        var matched = trimmed.match(SPACE_ID_PATTERN);
+        if (matched) return matched[1];
+        return null;
     }
 
     // ============================================================
@@ -589,6 +741,10 @@
             '.psm-icon-btn:hover:not(:disabled){background:#f2f5f8;}' +
             '.psm-icon-btn:disabled{opacity:0.35;cursor:not-allowed;}' +
             '.psm-warn{color:#c0392b;font-size:12px;margin-top:2px;}' +
+            '.psm-space-add{margin-top:12px;padding-top:12px;border-top:1px dashed #e0e5ea;}' +
+            '.psm-space-add-row{display:flex;gap:8px;align-items:center;}' +
+            '.psm-space-add-note{font-size:12px;color:#6b7684;margin:6px 0 0 0;}' +
+            '.psm-space-add-msg{font-size:12px;margin:6px 0 0 0;}' +
             '.psm-sync-section{margin-top:14px;padding-top:14px;border-top:1px solid #e6eaef;}' +
             '.psm-sync-heading{font-size:11px;font-weight:500;color:#6b7684;letter-spacing:.04em;margin:0 0 8px 0;}' +
             '.psm-seg{display:flex;background:#eaeef2;border-radius:9px;padding:3px;gap:3px;}' +
@@ -617,6 +773,7 @@
             '.psm-overlay.psm-visible .psm-dialog{transform:translateY(0);}' +
             '.psm-input,.psm-select{font-size:16px;}' +
             '.psm-seg{flex-direction:column;}' +
+            '.psm-space-add-row{flex-direction:column;align-items:stretch;}' +
             '}';
         document.head.appendChild(style);
     }
@@ -639,10 +796,11 @@
         var savedList = loadShortcutSettings();
         // 作業コピー（保存前の編集はここにのみ反映し、キャンセル時は破棄する）
         var workingList = savedList.map(function (item) {
-            return { appId: item.appId, appName: item.appName, label: item.label, labelCustom: item.labelCustom };
+            return { type: item.type, targetId: item.targetId, targetName: item.targetName, label: item.label, labelCustom: item.labelCustom };
         });
         var dirty = false;
         var loadedApps = [];
+        var loadedSpaces = [];
         var selectedMode = getStorageMode(); // 保存先モード（'app'=共有 / 'local'=この端末だけ）。既定は共有。
 
         // 現在のテーマ・形状（🎨 / 🔲 の選択値）。モーダルの配色とプレビューに使う。
@@ -679,7 +837,7 @@
 
         var introMsg = document.createElement('p');
         introMsg.className = 'psm-intro';
-        introMsg.textContent = '「登録するアプリ」で遷移先を選び、「ボタンに表示する名前」でポータルに表示される文字を決めます。';
+        introMsg.textContent = '「登録する遷移先」でアプリまたはスペースを選び、「ボタンに表示する名前」でポータルに表示される文字を決めます。';
         body.appendChild(introMsg);
 
         var errorMsg = document.createElement('p');
@@ -689,7 +847,7 @@
 
         var loadingMsg = document.createElement('div');
         loadingMsg.className = 'psm-loading';
-        loadingMsg.textContent = 'アプリ一覧を取得しています...';
+        loadingMsg.textContent = 'アプリ・スペース一覧を取得しています...';
         body.appendChild(loadingMsg);
 
         // --- 完成イメージ（プレビュー）。アプリ一覧の取得後に表示する ---
@@ -708,6 +866,78 @@
         rowsContainer.style.display = 'none';
         body.appendChild(rowsContainer);
 
+        // --- スペースURL/ID貼り付け（C: フォールバック）。一覧に無いスペースを候補に追加する ---
+        var spaceAddWrap = document.createElement('div');
+        spaceAddWrap.className = 'psm-space-add';
+        spaceAddWrap.style.display = 'none'; // rowsContainer と同様、アプリ・スペース一覧取得後に表示する
+
+        var spaceAddHeading = document.createElement('div');
+        spaceAddHeading.className = 'psm-sync-heading';
+        spaceAddHeading.textContent = '一覧に無いスペースを追加';
+        spaceAddWrap.appendChild(spaceAddHeading);
+
+        var spaceAddRow = document.createElement('div');
+        spaceAddRow.className = 'psm-space-add-row';
+
+        var spaceAddInput = document.createElement('input');
+        spaceAddInput.type = 'text';
+        spaceAddInput.className = 'psm-input';
+        spaceAddInput.placeholder = 'スペースのURL または スペースID';
+        spaceAddRow.appendChild(spaceAddInput);
+
+        var spaceAddBtn = document.createElement('button');
+        spaceAddBtn.className = 'psm-btn';
+        spaceAddBtn.textContent = '候補に追加';
+        spaceAddRow.appendChild(spaceAddBtn);
+
+        spaceAddWrap.appendChild(spaceAddRow);
+
+        var spaceAddNote = document.createElement('p');
+        spaceAddNote.className = 'psm-space-add-note';
+        spaceAddNote.textContent = 'アプリが1つも無いスペースは一覧に出ません。スペースのURLを貼り付けて追加してください。';
+        spaceAddWrap.appendChild(spaceAddNote);
+
+        var spaceAddMsg = document.createElement('p');
+        spaceAddMsg.className = 'psm-space-add-msg';
+        spaceAddWrap.appendChild(spaceAddMsg);
+
+        function showSpaceAddMsg(msg, isSuccess) {
+            spaceAddMsg.textContent = msg || '';
+            spaceAddMsg.style.color = isSuccess ? '#2d7a4f' : '#c0392b';
+        }
+
+        spaceAddBtn.onclick = function () {
+            showSpaceAddMsg('', true);
+            var spaceId = extractSpaceIdFromInput(spaceAddInput.value);
+            if (!spaceId) {
+                showSpaceAddMsg('スペースのURLまたはIDを正しく入力してください。', false);
+                return;
+            }
+            for (var i = 0; i < loadedSpaces.length; i++) {
+                if (loadedSpaces[i].id === spaceId) {
+                    showSpaceAddMsg('このスペースは既に一覧にあります。', true);
+                    return;
+                }
+            }
+            spaceAddBtn.disabled = true;
+            fetchSpaceById(spaceId, function (space) {
+                spaceAddBtn.disabled = false;
+                loadedSpaces.push(space);
+                loadedSpaces.sort(function (a, b) {
+                    return a.name.localeCompare(b.name, 'ja');
+                });
+                spaceListCache = loadedSpaces;
+                renderRows();
+                showSpaceAddMsg('『' + space.name + '』を候補に追加しました。', true);
+                spaceAddInput.value = '';
+            }, function () {
+                spaceAddBtn.disabled = false;
+                showSpaceAddMsg('スペースが見つからないか、閲覧権限がありません。', false);
+            });
+        };
+
+        body.appendChild(spaceAddWrap);
+
         /**
          * 作業コピーの内容から、ポータルに表示されるボタンの完成イメージを描き直す。
          * 色（テーマ）と角丸（形状）は実物と同じ値を使い、サイズのみ縮小する。
@@ -715,7 +945,7 @@
         function renderPreview() {
             removeAllChildren(previewBox);
             workingList.forEach(function (item) {
-                if (!item.appId) {
+                if (!item.targetId) {
                     var empty = document.createElement('div');
                     empty.className = 'psm-preview-empty';
                     empty.textContent = '未選択';
@@ -724,8 +954,9 @@
                 }
                 var btn = document.createElement('div');
                 btn.className = 'psm-preview-btn';
-                // 実際のボタン描画と同じ優先順。ただしアプリIDは画面に出さない。
-                btn.textContent = item.label || item.appName || '（未設定）';
+                // 実際のボタン描画と同じ優先順。ただしIDは画面に出さない。スペースのみ先頭に 📁 を付ける。
+                var text = item.label || item.targetName || '（未設定）';
+                btn.textContent = (item.type === TARGET_TYPE_SPACE ? '📁 ' : '') + text;
                 btn.style.background = theme.grad;
                 btn.style.boxShadow = theme.shadow;
                 btn.style.borderRadius = shape.radius;
@@ -892,29 +1123,107 @@
         closeBtn.onclick = function () { confirmDiscardIfDirty(closeModal); };
         cancelBtn.onclick = function () { closeModal(); }; // キャンセルは明示的破棄のため確認なし
 
-        function findAppName(appId) {
+        /** type/targetId から現在の名称を探す。app は loadedApps、space は loadedSpaces → 無ければ spaceNameCache。 */
+        function findTargetName(type, targetId) {
+            if (type === TARGET_TYPE_SPACE) {
+                for (var s = 0; s < loadedSpaces.length; s++) {
+                    if (loadedSpaces[s].id === targetId) return loadedSpaces[s].name;
+                }
+                if (spaceNameCache[targetId]) return spaceNameCache[targetId];
+                return null;
+            }
             for (var i = 0; i < loadedApps.length; i++) {
-                if (loadedApps[i].id === appId) return loadedApps[i].name;
+                if (loadedApps[i].id === targetId) return loadedApps[i].name;
             }
             return null;
         }
 
         /**
-         * 保存済みのアプリ名スナップショットを最新のアプリ名へ追従させる。
+         * 保存済みの名称スナップショットを最新の名称へ追従させる。
          * ユーザーが独自の表示名を付けている行（labelCustom）は表示名を変更しない。
          */
-        function refreshAppNames() {
+        function refreshTargetNames() {
             workingList.forEach(function (item) {
-                if (!item.appId) return;
-                var latest = findAppName(item.appId);
-                if (!latest || latest === item.appName) return;
+                if (!item.targetId) return;
+                var latest = findTargetName(item.type, item.targetId);
+                if (!latest || latest === item.targetName) return;
                 if (!item.labelCustom) item.label = latest;
-                item.appName = latest;
+                item.targetName = latest;
             });
         }
 
         function updateFooterState() {
             addBtn.disabled = (workingList.length >= MAX_SHORTCUTS);
+        }
+
+        /** select の value（複合キー "type:targetId"）を {type,targetId} へ戻す。不正な形式は null。 */
+        function parseTargetValue(value) {
+            if (!value) return null;
+            var sepIdx = value.indexOf(':');
+            if (sepIdx < 1) return null;
+            var type = value.slice(0, sepIdx);
+            var targetId = value.slice(sepIdx + 1);
+            if ((type !== TARGET_TYPE_APP && type !== TARGET_TYPE_SPACE) || !targetId) return null;
+            return { type: type, targetId: targetId };
+        }
+
+        /** loadedSpaces をスペース名順に整え、セッションキャッシュにも反映する。 */
+        function sortLoadedSpaces() {
+            loadedSpaces.sort(function (a, b) {
+                return a.name.localeCompare(b.name, 'ja');
+            });
+            spaceListCache = loadedSpaces;
+        }
+
+        /**
+         * 保存済み設定に含まれるスペースのうち、候補一覧（loadedSpaces）に無いものを個別に解決する。
+         * アプリを1つも持たないスペースは apps.json の spaceId から辿れないため、URL貼り付けで登録した
+         * スペースがこの処理なしでは次回オープン時に「（利用できません）」と誤表示されてしまう。
+         * 取得に失敗したものは解決せず、従来どおり「（利用できません）」として扱う。
+         * 成否にかかわらず onDone は必ず1回だけ呼ぶ。
+         */
+        function resolveMissingSpaces(onDone) {
+            var known = {};
+            var i;
+            for (i = 0; i < loadedSpaces.length; i++) {
+                known[loadedSpaces[i].id] = true;
+            }
+            var missing = [];
+            for (i = 0; i < workingList.length; i++) {
+                var item = workingList[i];
+                if (item.type !== TARGET_TYPE_SPACE || !item.targetId) continue;
+                if (known[item.targetId]) continue;
+                known[item.targetId] = true;
+                if (spaceNameCache[item.targetId]) {
+                    // 同一セッションで取得済みなら API を呼ばずに候補へ戻す
+                    loadedSpaces.push({ id: item.targetId, name: spaceNameCache[item.targetId] });
+                    continue;
+                }
+                missing.push(item.targetId);
+            }
+            if (!missing.length) {
+                sortLoadedSpaces();
+                onDone();
+                return;
+            }
+
+            var remaining = missing.length;
+            var finishOne = function () {
+                remaining--;
+                if (remaining <= 0) {
+                    sortLoadedSpaces();
+                    onDone();
+                }
+            };
+            missing.forEach(function (spaceId) {
+                fetchSpaceById(spaceId, function (space) {
+                    loadedSpaces.push(space);
+                    finishOne();
+                }, function () {
+                    // 本当に削除済み・権限なし。従来どおり「（利用できません）」表示に委ねる
+                    finishOne();
+                });
+            });
         }
 
         function buildRow(item, index) {
@@ -938,7 +1247,7 @@
             var appFieldLabel = document.createElement('label');
             appFieldLabel.className = 'psm-field-label';
             appFieldLabel.setAttribute('for', appFieldId);
-            appFieldLabel.textContent = '登録するアプリ';
+            appFieldLabel.textContent = '登録する遷移先';
             appField.appendChild(appFieldLabel);
 
             var select = document.createElement('select');
@@ -947,34 +1256,53 @@
 
             var placeholderOpt = document.createElement('option');
             placeholderOpt.value = '';
-            placeholderOpt.textContent = 'アプリを選択してください';
+            placeholderOpt.textContent = 'アプリ・スペースを選択してください';
             select.appendChild(placeholderOpt);
 
             var unavailableEl = null;
             var unavailableOpt = null;
-            if (item.appId && !findAppName(item.appId)) {
-                // 削除済み・権限なしのアプリを select が勝手に別アプリへ変えてしまわないよう、
+            var isSpaceItem = (item.type === TARGET_TYPE_SPACE);
+            if (item.targetId && !findTargetName(item.type, item.targetId)) {
+                // 削除済み・権限なしの遷移先を select が勝手に別の値へ変えてしまわないよう、
                 // 選択中のIDを保持する一時的な option を先頭付近に差し込んでおく。
                 unavailableOpt = document.createElement('option');
-                unavailableOpt.value = item.appId;
-                // アプリIDは画面に出さないため、アプリ名が不明な場合も汎用文言にとどめる
-                unavailableOpt.textContent = (item.appName || '選択中のアプリ') + '（利用できません）';
+                unavailableOpt.value = item.type + ':' + item.targetId;
+                // IDは画面に出さないため、名称が不明な場合も汎用文言にとどめる
+                unavailableOpt.textContent = (item.targetName || (isSpaceItem ? '選択中のスペース' : '選択中のアプリ')) + '（利用できません）';
                 select.appendChild(unavailableOpt);
 
                 unavailableEl = document.createElement('div');
                 unavailableEl.className = 'psm-warn';
-                unavailableEl.textContent = 'このアプリは利用できません（削除済み、または閲覧権限がありません）。差し替えてください。';
+                unavailableEl.textContent = isSpaceItem
+                    ? 'このスペースは利用できません（削除済み、または閲覧権限がありません）。差し替えてください。'
+                    : 'このアプリは利用できません（削除済み、または閲覧権限がありません）。差し替えてください。';
             }
 
             // loadedApps は fetchAllApps 成功時に一度だけアプリ名順にソート済み。
+            var appGroup = document.createElement('optgroup');
+            appGroup.label = 'アプリ';
             for (var optIdx = 0; optIdx < loadedApps.length; optIdx++) {
                 var appOpt = document.createElement('option');
-                appOpt.value = loadedApps[optIdx].id;
+                appOpt.value = TARGET_TYPE_APP + ':' + loadedApps[optIdx].id;
                 appOpt.textContent = loadedApps[optIdx].name;
-                select.appendChild(appOpt);
+                appGroup.appendChild(appOpt);
+            }
+            select.appendChild(appGroup);
+
+            // loadedSpaces が1件以上ある場合のみ「スペース」optgroup を追加する。
+            if (loadedSpaces.length > 0) {
+                var spaceGroup = document.createElement('optgroup');
+                spaceGroup.label = 'スペース';
+                for (var spIdx = 0; spIdx < loadedSpaces.length; spIdx++) {
+                    var spaceOpt = document.createElement('option');
+                    spaceOpt.value = TARGET_TYPE_SPACE + ':' + loadedSpaces[spIdx].id;
+                    spaceOpt.textContent = loadedSpaces[spIdx].name;
+                    spaceGroup.appendChild(spaceOpt);
+                }
+                select.appendChild(spaceGroup);
             }
 
-            select.value = item.appId || '';
+            select.value = item.targetId ? (item.type + ':' + item.targetId) : '';
             appField.appendChild(select);
             if (unavailableEl) appField.appendChild(unavailableEl);
             main.appendChild(appField);
@@ -1028,29 +1356,33 @@
             row.appendChild(actions);
 
             select.addEventListener('change', function () {
-                var newAppId = select.value;
-                if (!newAppId) {
+                var parsedValue = parseTargetValue(select.value);
+                if (!parsedValue) {
                     // プレースホルダーが選ばれた場合は未選択として扱う（保存時バリデーションで弾かれる）
-                    item.appId = '';
+                    item.targetId = '';
+                    item.type = TARGET_TYPE_APP;
                     dirty = true;
                     renderPreview();
                     return;
                 }
-                var appName = findAppName(newAppId) || '';
+                var newType = parsedValue.type;
+                var newTargetId = parsedValue.targetId;
+                var targetName = findTargetName(newType, newTargetId) || '';
                 var wasAutoLabel = !item.labelCustom;
-                item.appId = newAppId;
-                item.appName = appName;
+                item.type = newType;
+                item.targetId = newTargetId;
+                item.targetName = targetName;
                 if (wasAutoLabel || !labelInput.value) {
-                    item.label = appName;
-                    labelInput.value = appName;
+                    item.label = targetName;
+                    labelInput.value = targetName;
                     item.labelCustom = false;
                 }
                 if (unavailableEl && unavailableEl.parentNode) {
                     unavailableEl.parentNode.removeChild(unavailableEl);
                     unavailableEl = null;
                 }
-                // 利用できないアプリを選び直した後は、その選択肢自体も取り除く
-                if (unavailableOpt && unavailableOpt.parentNode && unavailableOpt.value !== newAppId) {
+                // 利用できない遷移先を選び直した後は、その選択肢自体も取り除く
+                if (unavailableOpt && unavailableOpt.parentNode && unavailableOpt.value !== select.value) {
                     unavailableOpt.parentNode.removeChild(unavailableOpt);
                     unavailableOpt = null;
                 }
@@ -1060,7 +1392,7 @@
 
             labelInput.addEventListener('input', function () {
                 item.label = labelInput.value;
-                item.labelCustom = (labelInput.value !== item.appName);
+                item.labelCustom = (labelInput.value !== item.targetName);
                 dirty = true;
                 renderPreview();
             });
@@ -1103,7 +1435,7 @@
 
         addBtn.onclick = function () {
             if (workingList.length >= MAX_SHORTCUTS) return;
-            workingList.push({ appId: '', appName: '', label: '', labelCustom: false });
+            workingList.push({ type: TARGET_TYPE_APP, targetId: '', targetName: '', label: '', labelCustom: false });
             dirty = true;
             renderRows();
             var selects = rowsContainer.querySelectorAll('.psm-select');
@@ -1144,8 +1476,8 @@
         saveBtn.onclick = function () {
             showError('');
             for (var i = 0; i < workingList.length; i++) {
-                if (!workingList[i].appId) {
-                    showError('すべての行でアプリを選択してください。');
+                if (!workingList[i].targetId) {
+                    showError('すべての行で遷移先（アプリ／スペース）を選択してください。');
                     return;
                 }
             }
@@ -1211,17 +1543,26 @@
         // --- アプリ一覧取得（モーダルを開いた時のみ） ---
         fetchAllApps(function (apps) {
             loadedApps = apps;
-            refreshAppNames();
-            loadingMsg.style.display = 'none';
-            previewWrap.style.display = 'block';
-            rowsContainer.style.display = 'block';
-            if (syncSection) syncSection.style.display = 'block';
-            renderRows();
-            var firstSelect = rowsContainer.querySelector('.psm-select');
-            if (firstSelect) firstSelect.focus();
+            // スペース候補の取得が全件失敗しても、アプリ候補だけでモーダルが開けることが受け入れ条件。
+            // fetchAllSpaces はエラーコールバックを持たず、失敗は静かに除外されて空配列で完了する。
+            fetchAllSpaces(function (spaces) {
+                loadedSpaces = spaces;
+                // 候補一覧に出ないスペース（アプリを持たないスペース）を保存済み設定から解決してから描画する。
+                resolveMissingSpaces(function () {
+                    refreshTargetNames();
+                    loadingMsg.style.display = 'none';
+                    previewWrap.style.display = 'block';
+                    rowsContainer.style.display = 'block';
+                    spaceAddWrap.style.display = 'block';
+                    if (syncSection) syncSection.style.display = 'block';
+                    renderRows();
+                    var firstSelect = rowsContainer.querySelector('.psm-select');
+                    if (firstSelect) firstSelect.focus();
+                });
+            });
         }, function () {
             loadingMsg.style.display = 'none';
-            showError('アプリ一覧の取得に失敗しました。時間をおいて再度お試しください。既存の設定は変更されていません。');
+            showError('アプリ・スペース一覧の取得に失敗しました。時間をおいて再度お試しください。既存の設定は変更されていません。');
             addBtn.disabled = true;
             resetBtn.disabled = true;
             saveBtn.disabled = true;
@@ -1260,6 +1601,19 @@
             }
         }
 
+        /**
+         * ショートカット項目の遷移先URLを組み立てる。
+         * アプリ: /k/{id}/ 。スペース: PC /k/#/space/{id} 、モバイル /k/m/space/{id}（ハッシュ無し）。
+         * （本番用フォルダ/スペース設定/space-visibility-filter.js:161 および
+         *  space-join-button.js:112 の実機確認済みコメントと一致する形式）
+         */
+        function buildShortcutHref(item) {
+            if (item.type === TARGET_TYPE_SPACE) {
+                return isMobile ? ('/k/m/space/' + item.targetId) : ('/k/#/space/' + item.targetId);
+            }
+            return '/k/' + item.targetId + '/';
+        }
+
         /** 設定配列からショートカットボタンを描画し直す（保存直後もリロードなしで呼べる） */
         function redrawShortcuts() {
             var list = loadShortcutSettings();
@@ -1269,8 +1623,22 @@
             list.forEach(function (item) {
                 var linkBtn = document.createElement('a');
                 linkBtn.setAttribute(BTN_MARKER_ATTR, 'true');
-                linkBtn.href = '/k/' + item.appId + '/';
-                linkBtn.textContent = item.label || item.appName || item.appId;
+                linkBtn.href = buildShortcutHref(item);
+                linkBtn.textContent = item.label || item.targetName || item.targetId;
+                if (item.type === TARGET_TYPE_SPACE) {
+                    // PC側はハッシュのみの変化だと portal.show イベントが発火せず遷移しないことがあるため、
+                    // クリック時に明示的に location.href へ代入する（通常のページ遷移として扱わせる）。
+                    // 同一URL（既にそのスペースを開いている状態）の場合はリロードする。
+                    linkBtn.onclick = function (e) {
+                        e.preventDefault();
+                        var href = buildShortcutHref(item);
+                        if (location.pathname + location.hash === href) {
+                            location.reload();
+                            return;
+                        }
+                        location.href = href;
+                    };
+                }
                 linkBtn.style.boxSizing = 'border-box';
                 linkBtn.style.display = 'flex';
                 linkBtn.style.justifyContent = 'center';
