@@ -790,3 +790,29 @@ describe('20. イベントハンドラ経由の結合テスト', () => {
         assert.equal(JSON.parse(m.ctx.localStorage.getItem('kintone_portal_global_settings_v1')).recordId, '1');
     });
 });
+
+describe('21. スペース候補の追加（管理者画面）', () => {
+    const { api } = loadModule();
+    test('extractSpaceIdFromInput: 数字・URL・空白付き', () => {
+        assert.equal(api.extractSpaceIdFromInput('16'), '16');
+        assert.equal(api.extractSpaceIdFromInput('https://example.cybozu.com/k/#/space/16'), '16');
+        assert.equal(api.extractSpaceIdFromInput('  16  '), '16');
+    });
+    test('extractSpaceIdFromInput: 不正な入力は null', () => {
+        assert.equal(api.extractSpaceIdFromInput(''), null);
+        assert.equal(api.extractSpaceIdFromInput('abc'), null);
+        assert.equal(api.extractSpaceIdFromInput(null), null);
+        assert.equal(api.extractSpaceIdFromInput(16), null);
+    });
+    test('addSpaceCandidate: 追加すると true で日本語順に並ぶ', () => {
+        const spaces = [{ id: '2', name: 'い' }];
+        assert.equal(api.addSpaceCandidate(spaces, { id: '1', name: 'あ' }), true);
+        assert.deepEqual(plain(spaces.map((s) => s.name)), ['あ', 'い']);
+    });
+    test('addSpaceCandidate: 同じ id は false で配列を変えない', () => {
+        const spaces = [{ id: '1', name: 'あ' }, { id: '2', name: 'い' }];
+        assert.equal(api.addSpaceCandidate(spaces, { id: '2', name: 'う' }), false);
+        assert.deepEqual(plain(spaces.map((s) => s.id)), ['1', '2']);
+        assert.equal(spaces.length, 2);
+    });
+});
