@@ -216,7 +216,6 @@ Kintone ポータル画面の上部に、よく使うアプリへのショート
   - `mobile.app.record.index.show`（レコード一覧）
   - `mobile.app.record.detail.show`（レコード詳細）
   - `mobile.space.portal.show`（スペースのポータル）
-- ポータル（ホーム）画面では表示しません（既にホームのため不要）。
 - `document.body` に直接追加し、独自 ID `mobile-home-shortcut` で重複生成を防ぎます。他ファイルへの依存はありません。
 
 ---
