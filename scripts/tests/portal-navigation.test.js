@@ -51,7 +51,7 @@ function makeElement() {
  */
 function loadModule(opts) {
     opts = opts || {};
-    const rec = { eventsOn: [], apiCalls: [], bodyAppends: [], warns: [] };
+    const rec = { eventsOn: [], apiCalls: [], bodyAppends: [], warns: [], created: [] };
     let ctx = opts.context;
     if (!ctx) {
         const body = makeElement();
@@ -63,7 +63,7 @@ function loadModule(opts) {
             sessionStorage: makeStorage(),
             document: {
                 getElementById() { return null; },
-                createElement() { return makeElement(); },
+                createElement() { const e = makeElement(); rec.created.push(e); return e; },
                 head: head,
                 body: body,
                 querySelectorAll() { return []; },
@@ -226,7 +226,7 @@ describe('6. resolveDesign', () => {
 
     test('個人設定が無ければ全体設定の値', () => {
         const r = api.resolveDesign(null, gs);
-        assert.deepEqual(plain(r), { scTheme: 'purple', scShape: 'rounded', homeTheme: 'green', homeShape: 'rounded', forced: false });
+        assert.deepEqual(plain(r), { scTheme: 'purple', scShape: 'rounded', homeTheme: 'purple', homeShape: 'rounded', forced: false });
     });
     test('全体設定が無ければ DEFAULT_DESIGN', () => {
         const r = api.resolveDesign(null, null);
@@ -238,29 +238,40 @@ describe('6. resolveDesign', () => {
         assert.equal(r.forced, false);
     });
     test('個人設定はキー単位で上書きされる', () => {
-        const r = api.resolveDesign({ scThemeIdx: 1, scShapeIdx: null, homeThemeIdx: null, rev: 0 }, gs);
+        const r = api.resolveDesign({ scThemeIdx: 1, scShapeIdx: null, rev: 0 }, gs);
         assert.equal(r.scTheme, 'green');
         assert.equal(r.scShape, 'rounded');
         assert.equal(r.homeTheme, 'green');
+        assert.equal(r.homeShape, 'rounded');
         assert.equal(r.forced, false);
     });
     test('rev < designForceRev なら全体設定の値で forced:true', () => {
-        const r = api.resolveDesign({ scThemeIdx: 0, scShapeIdx: 0, homeThemeIdx: 0, rev: 1 }, Object.assign({}, gs, { designForceRev: 2 }));
+        const r = api.resolveDesign({ scThemeIdx: 0, scShapeIdx: 0, rev: 1 }, Object.assign({}, gs, { designForceRev: 2 }));
         assert.equal(r.forced, true);
         assert.equal(r.scTheme, 'purple');
         assert.equal(r.scShape, 'rounded');
-        assert.equal(r.homeTheme, 'green');
+        assert.equal(r.homeTheme, 'purple');
     });
-    test('homeShape は個人設定があっても常に全体設定の値', () => {
-        const r = api.resolveDesign({ scThemeIdx: 0, scShapeIdx: 0, homeThemeIdx: 3, rev: 0 }, gs);
-        assert.equal(r.homeTheme, 'standard');
-        assert.equal(r.homeShape, 'rounded');
+    test('ホームの形はショートカットの形から決まる', () => {
+        const r = api.resolveDesign({ scThemeIdx: null, scShapeIdx: 0, rev: 0 }, gs);
+        assert.equal(r.homeShape, 'circle');
+    });
+    test('全体設定の homeTheme/homeShape が違っても揃う', () => {
+        const g2 = { design: { scTheme: 'navy', scShape: 'capsule', homeTheme: 'standard', homeShape: 'rounded' }, designForceRev: 0 };
+        const r = api.resolveDesign(null, g2);
+        assert.equal(r.homeTheme, 'navy');
+        assert.equal(r.homeShape, 'circle');
+    });
+    test('旧 homeThemeIdx だけでは個人設定ありとみなさない', () => {
+        const r = api.resolveDesign({ scThemeIdx: null, scShapeIdx: null, homeThemeIdx: 3, rev: 0 }, Object.assign({}, gs, { designForceRev: 5 }));
+        assert.equal(r.forced, false);
+        assert.equal(r.homeTheme, 'purple');
     });
     test('範囲外の添字は無視される', () => {
-        const r = api.resolveDesign({ scThemeIdx: 99, scShapeIdx: 99, homeThemeIdx: 99, rev: 0 }, gs);
+        const r = api.resolveDesign({ scThemeIdx: 99, scShapeIdx: 99, rev: 0 }, gs);
         assert.equal(r.scTheme, 'purple');
         assert.equal(r.scShape, 'rounded');
-        assert.equal(r.homeTheme, 'green');
+        assert.equal(r.homeTheme, 'purple');
     });
 });
 
@@ -364,6 +375,11 @@ describe('9. buildGlobalSettingsPayload', () => {
         const back = api.parseGlobalSettingsJson(JSON.stringify(payload));
         assert.deepEqual(plain(back), plain(payload));
         assert.equal(payload.updatedBy, 'テスター');
+    });
+    test('home* は scTheme/scShape からの派生値で保存される', () => {
+        const payload = api.buildGlobalSettingsPayload(draft, 8, false, false, prev);
+        assert.equal(payload.design.homeTheme, 'green');
+        assert.equal(payload.design.homeShape, 'rounded');
     });
 });
 
@@ -619,7 +635,7 @@ describe('16. 全体設定が使えるとき: refreshGlobalSettings', () => {
     });
 });
 
-describe('17. writePersonalDesign', () => {
+describe('17. savePersonalDesign / clearPersonalDesign', () => {
     function setup(gsRaw) {
         const m = loadModule({ src: SRC_GLOBAL });
         m.ctx.localStorage.setItem('kintone_portal_global_settings_v1', JSON.stringify({
@@ -628,34 +644,124 @@ describe('17. writePersonalDesign', () => {
         return m;
     }
 
-    test('有効な個人設定なら、そのキーだけ書き、現在の settingsRev を記録する', () => {
+    test('色と形を一括で書き、design_rev は1回だけ、旧キーは消す', () => {
         const { ctx, api } = setup(globalRaw({ settingsRev: 13, designForceRev: 5 }));
-        ctx.localStorage.setItem('kintone_portal_shape_idx', '1');
+        ctx.localStorage.setItem('kintone_portal_home_theme_idx', '3');
         ctx.localStorage.setItem('kintone_portal_design_rev', '9');
-        api.writePersonalDesign('scTheme', 2);
+        const writes = [];
+        const orig = ctx.localStorage.setItem;
+        ctx.localStorage.setItem = (k, v) => { writes.push(k); return orig(k, v); };
+        const ok = api.savePersonalDesign('purple', 'rounded');
+        ctx.localStorage.setItem = orig;
+        assert.equal(ok, true);
         assert.equal(ctx.localStorage.getItem('kintone_portal_theme_idx'), '2');
-        assert.equal(ctx.localStorage.getItem('kintone_portal_shape_idx'), '1', '他のキーは残る');
+        assert.equal(ctx.localStorage.getItem('kintone_portal_shape_idx'), '1');
+        assert.equal(ctx.localStorage.getItem('kintone_portal_home_theme_idx'), null);
         assert.equal(ctx.localStorage.getItem('kintone_portal_design_rev'), '13');
+        assert.equal(writes.filter((k) => k === 'kintone_portal_design_rev').length, 1);
     });
 
-    test('強制反映で無効なら、先に3つのキーを消してから書く', () => {
+    test('強制反映中でも保存でき、保存後は forced:false で保存値が効く', () => {
         const { ctx, api } = setup(globalRaw({ settingsRev: 13, designForceRev: 13 }));
         ctx.localStorage.setItem('kintone_portal_theme_idx', '1');
         ctx.localStorage.setItem('kintone_portal_shape_idx', '1');
-        ctx.localStorage.setItem('kintone_portal_home_theme_idx', '3');
         ctx.localStorage.setItem('kintone_portal_design_rev', '4');
-        api.writePersonalDesign('homeTheme', 0);
-        assert.equal(ctx.localStorage.getItem('kintone_portal_theme_idx'), null);
-        assert.equal(ctx.localStorage.getItem('kintone_portal_shape_idx'), null);
-        assert.equal(ctx.localStorage.getItem('kintone_portal_home_theme_idx'), '0');
-        assert.equal(ctx.localStorage.getItem('kintone_portal_design_rev'), '13');
+        assert.equal(api.savePersonalDesign('navy', 'capsule'), true);
+        const gs = api.parseGlobalSettingsJson(globalRaw({ settingsRev: 13, designForceRev: 13 }));
+        const r = api.resolveDesign(api.readPersonalDesign(), gs);
+        assert.equal(r.forced, false);
+        assert.equal(r.scTheme, 'navy');
+        assert.equal(r.scShape, 'capsule');
+        assert.equal(r.homeTheme, 'navy');
+        assert.equal(r.homeShape, 'circle');
     });
 
-    test('全体設定が無ければ rev は 0 を記録する', () => {
+    test('不正な名前なら false を返し、何も書かない', () => {
+        const { ctx, api } = setup(globalRaw());
+        assert.equal(api.savePersonalDesign('rainbow', 'rounded'), false);
+        assert.equal(api.savePersonalDesign('navy', 'hexagon'), false);
+        assert.equal(ctx.localStorage.getItem('kintone_portal_theme_idx'), null);
+        assert.equal(ctx.localStorage.getItem('kintone_portal_shape_idx'), null);
+        assert.equal(ctx.localStorage.getItem('kintone_portal_design_rev'), null);
+    });
+
+    test('全体設定が無ければ design_rev は 0 を記録する', () => {
         const { ctx, api } = loadModule({ src: SRC_GLOBAL });
-        api.writePersonalDesign('scShape', 1);
+        api.savePersonalDesign('green', 'rounded');
         assert.equal(ctx.localStorage.getItem('kintone_portal_shape_idx'), '1');
         assert.equal(ctx.localStorage.getItem('kintone_portal_design_rev'), '0');
+    });
+
+    test('clearPersonalDesign で4キーがすべて消える', () => {
+        const { ctx, api } = loadModule({ src: SRC_GLOBAL });
+        ['theme_idx', 'shape_idx', 'home_theme_idx', 'design_rev'].forEach((k) => ctx.localStorage.setItem('kintone_portal_' + k, '1'));
+        api.clearPersonalDesign();
+        ['theme_idx', 'shape_idx', 'home_theme_idx', 'design_rev'].forEach((k) => {
+            assert.equal(ctx.localStorage.getItem('kintone_portal_' + k), null, k);
+        });
+    });
+});
+
+describe('17b. 派生ヘルパー', () => {
+    const { api } = loadModule();
+    test('homeShapeNameForScShape', () => {
+        assert.equal(api.homeShapeNameForScShape('capsule'), 'circle');
+        assert.equal(api.homeShapeNameForScShape('rounded'), 'rounded');
+        assert.equal(api.homeShapeNameForScShape('x'), 'circle');
+    });
+    test('withDerivedHome', () => {
+        assert.deepEqual(plain(api.withDerivedHome({ scTheme: 'green', scShape: 'rounded', homeTheme: 'navy', homeShape: 'circle' })),
+            { scTheme: 'green', scShape: 'rounded', homeTheme: 'green', homeShape: 'rounded' });
+    });
+});
+
+describe('17c. デザイン設定モーダル（スモーク）', () => {
+    test('例外なく開き、2回呼んでも枠は1つだけ追加される（多重オープン防止）', () => {
+        const { api, rec } = loadModule({ pathname: '/k/' });
+        const before = rec.bodyAppends.length;
+        api.openDesignSettingsModal(() => {});
+        const after1 = rec.bodyAppends.length;
+        api.openDesignSettingsModal(() => {});
+        assert.equal(after1 - before, 1);
+        assert.equal(rec.bodyAppends.length, after1);
+    });
+
+    // 作成済みの要素から className / textContent で最新の1つを探す
+    function lastEl(rec, pred) {
+        return rec.created.slice().reverse().find(pred);
+    }
+
+    test('閉じた後にもう一度開ける（afterClose でフラグが戻る）', () => {
+        const { api, rec } = loadModule({ pathname: '/k/' });
+        const before = rec.bodyAppends.length;
+        api.openDesignSettingsModal(() => {});
+        lastEl(rec, (e) => e.className === 'psm-close').onclick();
+        api.openDesignSettingsModal(() => {});
+        assert.equal(rec.bodyAppends.length - before, 2);
+    });
+
+    test('未変更のとき保存は disabled、色を選ぶと有効になる。個人設定が無ければ「既定に戻す」も disabled', () => {
+        const { api, rec } = loadModule({ pathname: '/k/' });
+        api.openDesignSettingsModal(() => {});
+        const saveBtn = lastEl(rec, (e) => e.className === 'psm-btn psm-btn-primary');
+        const resetBtn = lastEl(rec, (e) => e.textContent === '管理者の既定に戻す');
+        assert.equal(saveBtn.disabled, true);
+        assert.equal(resetBtn.disabled, true);
+        lastEl(rec, (e) => e.className === 'pna-swatch').onclick();
+        assert.equal(saveBtn.disabled, false);
+    });
+
+    test('変更があるとき × は破棄確認を出し、拒否すると閉じない', () => {
+        const { ctx, api, rec } = loadModule({ pathname: '/k/' });
+        let asked = 0;
+        ctx.confirm = () => { asked++; return false; };
+        api.openDesignSettingsModal(() => {});
+        lastEl(rec, (e) => e.className === 'pna-swatch').onclick();
+        lastEl(rec, (e) => e.className === 'psm-close').onclick();
+        assert.equal(asked, 1);
+        const before = rec.bodyAppends.length;
+        api.openDesignSettingsModal(() => {}); // まだ開いたままなので増えない
+        assert.equal(rec.bodyAppends.length, before);
     });
 });
 

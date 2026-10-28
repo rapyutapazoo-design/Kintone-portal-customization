@@ -147,9 +147,9 @@ Kintone全体カスタマイズ/               ← 親（リポジトリルー�
 |---|---|---|
 | `kintone_portal_shortcuts_<userId>` | localStorage | 個人ショートカット（`baseRev` を追記） |
 | `kintone_portal_shortcuts_mode_<userId>` | localStorage | 保存先モード（`app` / `local`） |
-| `kintone_portal_theme_idx` / `kintone_portal_shape_idx` | localStorage | 🎨🔲 の選択（従来どおり） |
-| `kintone_portal_home_theme_idx` | localStorage | 🏠 の選択（ホームボタンの色） |
-| `kintone_portal_design_rev` | localStorage | 🎨🔲🏠 を最後に変えた時点の `settingsRev` |
+| `kintone_portal_theme_idx` / `kintone_portal_shape_idx` | localStorage | 🎨（デザイン設定）の色・形の選択 |
+| `kintone_portal_home_theme_idx` | localStorage | 旧キー（読まない。🎨 で保存・既定に戻す時に削除） |
+| `kintone_portal_design_rev` | localStorage | 🎨 のデザイン設定を最後に保存した時点の `settingsRev` |
 | `kintone_portal_global_settings_v1` | localStorage | 全体設定のキャッシュ（最長10分） |
 | `kintone_portal_admin_lock_<userId>` | localStorage | パスワード失敗のロック状態 |
 | `kintone_portal_admin_auth_<userId>` | sessionStorage | 管理者認証の有効期限 |
@@ -209,11 +209,11 @@ Kintone ポータル画面の上部に、よく使うアプリへのショート
 - **アプリショートカットボタン**
   - `appList` 配列（`portal-shortcut.js` 内）は**未設定時に表示される既定値**です。配置したいアプリのIDと表示名を列挙します。プレースホルダー（`your-app-id-1` 等）を実際のアプリIDに書き換えて利用してください。詳細は [`テンプレートフォルダ/README.md`](テンプレートフォルダ/README.md) を参照。
   - ボタンの遷移先は各アプリの `/k/{アプリID}/` です。行数は自由に増減できます（既定値としては4〜6個程度が目安）。
-- **カラーテーマ変更（🎨）・形状変更（🔲）**
+- **🎨 デザイン設定（色・形。ホームボタンも連動）**
   - ボタンのグラデーション配色（navy / green / purple / standard）と角丸形状（capsule / rounded）を切り替えできます。
   - 選択値はブラウザの `localStorage`（`kintone_portal_theme_idx` / `kintone_portal_shape_idx`）に個別保存されます。
 - **個人カスタマイズ（⚙️）**
-  - 🎨・🔲 の隣の ⚙️ ボタンから、ショートカットの**遷移先（アプリ／スペース）・表示名・並び順・個数（4〜6個）**をユーザー本人が編集できるモーダルを開きます。各行には「登録する遷移先」「ボタンに表示する名前」のラベルが常時表示され、カード状にまとまった行に番号が振られます。
+  - 🎨 の隣の ⚙️ ボタンから、ショートカットの**遷移先（アプリ／スペース）・表示名・並び順・個数（4〜6個）**をユーザー本人が編集できるモーダルを開きます。各行には「登録する遷移先」「ボタンに表示する名前」のラベルが常時表示され、カード状にまとまった行に番号が振られます。
   - 遷移先は名前順に並んだ選択肢（プルダウン）から選びます。「アプリ」「スペース」の2つの `<optgroup>` にまとまって表示され、IDは画面に表示されません。表示名は既定で選択した名称に追従し、任意に上書きできます（未入力の場合は選択した名称がそのまま表示されます）。プレビューでは、スペースを選んだ行の先頭にのみ 📁 が付きます。
   - スペースの候補は、既に配置されているアプリの所属スペースから自動的に集めて一覧に出します。**アプリを1つも持たないスペース**は一覧に出ないため、モーダル内の「一覧に無いスペースを追加」欄にスペースのURL（例: `https://xxx.cybozu.com/k/#/space/16`）または数字のスペースIDを貼り付けることで、候補に追加できます。
   - 編集中の内容は**「完成イメージ」としてモーダル内にプレビュー表示**され、保存前にポータル上での見え方を確認できます。

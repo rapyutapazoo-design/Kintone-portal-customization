@@ -28,7 +28,7 @@
  *   window.PortalCustomize として、ポータル上部のコンテナとマウントスロットを提供する。
  *   - 冪等（idempotent）初期化: 何度呼んでもコンテナは1度しか生成しない。
  *   - DOM ID: 'my-custom-app-container' / 'portal-customize-config' / 'mobile-home-shortcut'
- *   - スロット1=ショートカットボタン群 addShortcutItem(el)、スロット2=色/形/ホーム/個人設定ボタン
+ *   - スロット1=ショートカットボタン群 addShortcutItem(el)、スロット2=デザイン設定（🎨）・個人設定（⚙️）ボタン
  *     addConfigItem(el)、スロット3=フォントボタン群（font-size-changer.js が
  *     getConfigContainer() 経由で右寄せにマウントする。本ファイルは触れない）。
  *   ※ フォント設定（localStorage キー・kintone-font-size-changed イベント）はフォント側の所有物。
@@ -46,6 +46,7 @@
  *       "design":{"scTheme":"navy|green|purple|standard","scShape":"capsule|rounded",
  *                 "homeTheme":"navy|green|purple|standard","homeShape":"circle|rounded"},
  *       "shortcutsForceRev":0, "designForceRev":0, "updatedBy":"表示名", "updatedAt":"ISO8601" }
+ *     ※ homeTheme/homeShape は scTheme/scShape からの派生値を保存する（読み込み時は無視。旧版との互換用）
  *     shortcuts は 4〜6 件。settingsRev は管理者が保存するたびに +1 する。
  *   auth_json（文字列・複数行。フィールド権限で管理者だけが閲覧・編集）:
  *     { "v":1, "alg":"PBKDF2-SHA256", "iter":100000, "salt":"<base64 16バイト>",
@@ -58,8 +59,8 @@
  *   kintone_portal_shortcuts_mode_<userId>   localStorage   'app' か 'local'（既存・無変更）
  *   kintone_portal_theme_idx                 localStorage   THEMES の添字（既存・無変更）
  *   kintone_portal_shape_idx                 localStorage   SHAPES の添字（既存・無変更）
- *   kintone_portal_home_theme_idx            localStorage   ホームボタンの色（THEMES の添字。新規）
- *   kintone_portal_design_rev                localStorage   🎨🔲🏠 を最後に変えた時点の settingsRev（無ければ0。新規）
+ *   kintone_portal_home_theme_idx            localStorage   旧: ホームボタンの色。現在は読まない（🎨 で保存・既定に戻す時に削除）
+ *   kintone_portal_design_rev                localStorage   🎨 のデザイン設定を最後に保存した時点の settingsRev（無ければ0。新規）
  *   kintone_portal_global_settings_v1        localStorage   全体設定のキャッシュ（最長10分。新規）
  *   kintone_portal_admin_lock_<userId>       localStorage   {"fails":n,"until":ms}（パスワード失敗のロック。新規）
  *   kintone_portal_admin_auth_<userId>       sessionStorage {"appId":"..","until":ms}（認証の有効期限30分。新規）
@@ -164,6 +165,7 @@
     var NAV_MARKER_ATTR = 'data-portal-nav'; // 統合ファイルが作ったDOMに付ける印（旧ファイルが作ったものと区別する）
 
     // --- 色・形の最終既定値（JS内の既定値） ---
+    // home* は scTheme/scShape からの派生値（resolveDesign / withDerivedHome と一致させる）
     var DEFAULT_DESIGN = { scTheme: 'navy', scShape: 'capsule', homeTheme: 'navy', homeShape: 'circle' };
 
     // --- 全体設定（管理者の既定値）用 定数 ---
@@ -182,11 +184,12 @@
     var PBKDF2_HASH_BYTES = 32;
     var PASSWORD_MIN_LENGTH = 8;
     var ADMIN_STYLE_ID = 'portal-nav-admin-style';
+    var DESIGN_STYLE_ID = 'portal-nav-design-style';
 
     // --- localStorage / sessionStorage のキー（一覧はファイル先頭のコメント参照） ---
     var KEY_THEME_IDX = 'kintone_portal_theme_idx';
     var KEY_SHAPE_IDX = 'kintone_portal_shape_idx';
-    var KEY_HOME_THEME_IDX = 'kintone_portal_home_theme_idx';
+    var KEY_HOME_THEME_IDX = 'kintone_portal_home_theme_idx'; // 旧キー（ホームボタンの色）。読まない。掃除専用
     var KEY_DESIGN_REV = 'kintone_portal_design_rev';
     var KEY_GLOBAL_CACHE = 'kintone_portal_global_settings_v1';
     var KEY_ADMIN_LOCK_PREFIX = 'kintone_portal_admin_lock_';
@@ -268,6 +271,13 @@
         }
     }
 
+    function adminEl(tag, cls, text) {
+        var e = document.createElement(tag);
+        if (cls) e.className = cls;
+        if (text != null) e.textContent = text; // 文字列は必ず textContent で入れる（XSS 対策）
+        return e;
+    }
+
     /**
      * localStorage に保存された添字から要素を取り出す。
      * 未設定・数値でない・範囲外の場合は先頭要素にフォールバックする。
@@ -303,6 +313,19 @@
     function homeShapeByName(name) {
         for (var i = 0; i < HOME_SHAPES.length; i++) if (HOME_SHAPES[i].name === name) return HOME_SHAPES[i];
         return HOME_SHAPES[0];
+    }
+    /** ショートカットの形からホームボタンの形を決める（rounded→rounded、それ以外→circle）。 */
+    function homeShapeNameForScShape(scShape) {
+        return scShape === 'rounded' ? 'rounded' : 'circle';
+    }
+    /** ホームボタンの色・形をショートカットの色・形から派生させたデザインを返す（純関数）。 */
+    function withDerivedHome(design) {
+        return {
+            scTheme: design.scTheme,
+            scShape: design.scShape,
+            homeTheme: design.scTheme,
+            homeShape: homeShapeNameForScShape(design.scShape)
+        };
     }
     function isThemeName(name) {
         for (var i = 0; i < THEMES.length; i++) if (THEMES[i].name === name) return true;
@@ -595,7 +618,7 @@
                     labelCustom: !!item.labelCustom
                 };
             }),
-            design: { scTheme: d.scTheme, scShape: d.scShape, homeTheme: d.homeTheme, homeShape: d.homeShape },
+            design: withDerivedHome(d),
             shortcutsForceRev: forceSc ? nextRev : toRevNumber(prev && prev.shortcutsForceRev),
             designForceRev: forceDs ? nextRev : toRevNumber(prev && prev.designForceRev),
             updatedBy: getUserDisplayName(),
@@ -731,7 +754,7 @@
         return { list: defaults, source: 'default', forced: false };
     }
 
-    /** 個人のデザイン設定（🎨🔲🏠）を localStorage から読む。値が無い・範囲外のキーは null。 */
+    /** 個人のデザイン設定（🎨 の色・形）を localStorage から読む。値が無い・範囲外のキーは null。 */
     function readPersonalDesign() {
         function readIdx(key, len) {
             var p = parseInt(lget(key), 10);
@@ -741,7 +764,6 @@
         return {
             scThemeIdx: readIdx(KEY_THEME_IDX, THEMES.length),
             scShapeIdx: readIdx(KEY_SHAPE_IDX, SHAPES.length),
-            homeThemeIdx: readIdx(KEY_HOME_THEME_IDX, THEMES.length),
             rev: (isNaN(rev) || rev < 0) ? 0 : rev
         };
     }
@@ -749,25 +771,29 @@
     /**
      * 表示する色・形を決める（純関数）。名前で返す。
      * 土台は全体設定（無ければ DEFAULT_DESIGN）。個人設定が有効ならキー単位で上書きする。
-     * homeShape は常に全体設定（または既定）の値を使う。
+     * ホームボタンの色・形は scTheme/scShape から派生する（全体設定の homeTheme/homeShape は使わない）。
      * forced は「個人設定に値があったのに強制反映で無効になった」場合に true。
      */
     function resolveDesign(personalDesign, globalSettings) {
         var base = (globalSettings && globalSettings.design) ? globalSettings.design : DEFAULT_DESIGN;
-        var out = { scTheme: base.scTheme, scShape: base.scShape, homeTheme: base.homeTheme, homeShape: base.homeShape, forced: false };
+        var out = { scTheme: base.scTheme, scShape: base.scShape, forced: false };
+        function finish(o) {
+            o.homeTheme = o.scTheme;
+            o.homeShape = homeShapeNameForScShape(o.scShape);
+            return o;
+        }
         var pd = personalDesign;
-        if (!pd) return out;
-        var has = (pd.scThemeIdx != null) || (pd.scShapeIdx != null) || (pd.homeThemeIdx != null);
-        if (!has) return out;
+        if (!pd) return finish(out);
+        var has = (pd.scThemeIdx != null) || (pd.scShapeIdx != null);
+        if (!has) return finish(out);
         var forceRev = globalSettings ? globalSettings.designForceRev : 0;
         if (!isPersonalValid(pd.rev, forceRev)) {
             out.forced = true;
-            return out;
+            return finish(out);
         }
         if (typeof pd.scThemeIdx === 'number' && THEMES[pd.scThemeIdx]) out.scTheme = THEMES[pd.scThemeIdx].name;
         if (typeof pd.scShapeIdx === 'number' && SHAPES[pd.scShapeIdx]) out.scShape = SHAPES[pd.scShapeIdx].name;
-        if (typeof pd.homeThemeIdx === 'number' && THEMES[pd.homeThemeIdx]) out.homeTheme = THEMES[pd.homeThemeIdx].name;
-        return out;
+        return finish(out);
     }
 
     /** 今の有効なデザイン（ストレージと全体設定から決める）。 */
@@ -786,21 +812,25 @@
     }
 
     /**
-     * 個人のデザイン設定を1項目書く（field: 'scTheme' | 'scShape' | 'homeTheme'）。
-     * 今の個人設定が強制反映で無効なら、先に3つのキーをすべて消す。
-     * 書いたあと、その時点の settingsRev を kintone_portal_design_rev に記録する。
+     * 個人のデザイン設定（色・形）をまとめて保存する。
+     * 2つとも上書きし、旧キー（ホームボタンの色）を掃除して、その時点の settingsRev を
+     * kintone_portal_design_rev に1回だけ記録する。不正な名前なら何も書かず false。
      */
-    function writePersonalDesign(field, idx) {
-        var gs = getGlobalSettings();
-        var pd = readPersonalDesign();
-        if (!isPersonalValid(pd.rev, gs ? gs.designForceRev : 0)) {
-            lremove(KEY_THEME_IDX);
-            lremove(KEY_SHAPE_IDX);
-            lremove(KEY_HOME_THEME_IDX);
-        }
-        var key = (field === 'scTheme') ? KEY_THEME_IDX : (field === 'scShape') ? KEY_SHAPE_IDX : KEY_HOME_THEME_IDX;
-        lset(key, String(idx));
+    function savePersonalDesign(themeName, shapeName) {
+        if (!isThemeName(themeName) || !isShapeName(shapeName)) return false;
+        lset(KEY_THEME_IDX, String(themeIndexByName(themeName)));
+        lset(KEY_SHAPE_IDX, String(shapeIndexByName(shapeName)));
+        lremove(KEY_HOME_THEME_IDX);
         lset(KEY_DESIGN_REV, String(getCurrentSettingsRev()));
+        return true;
+    }
+
+    /** 個人のデザイン設定（色・形・旧ホーム色・記録した rev）をすべて消す。管理者の既定に戻る。 */
+    function clearPersonalDesign() {
+        lremove(KEY_THEME_IDX);
+        lremove(KEY_SHAPE_IDX);
+        lremove(KEY_HOME_THEME_IDX);
+        lremove(KEY_DESIGN_REV);
     }
 
 
@@ -1443,6 +1473,98 @@
         document.head.appendChild(style);
     }
 
+    // ============================================================
+    // デザイン部品（スウォッチ・セグメント・プレビュー）。🎨 のモーダルと管理者のデザインタブで共用する
+    // ============================================================
+    function injectDesignPartsStyle() {
+        if (document.getElementById(DESIGN_STYLE_ID)) return;
+        var style = document.createElement('style');
+        style.id = DESIGN_STYLE_ID;
+        style.textContent =
+            '.pna-card{background:#fff;border:1px solid #e6eaef;border-radius:10px;padding:14px;margin-bottom:12px;}' +
+            '.pna-card h3{font-size:13px;margin:0 0 10px 0;}' +
+            '.pna-card .psm-preview-box{background:none;border:none;padding:0;margin-bottom:0;max-height:none;}' +
+            '.pna-hint{font-size:12px;color:#8b95a1;margin-top:4px;}' +
+            '.pna-swatches{display:flex;flex-wrap:wrap;gap:10px;}' +
+            '.pna-swatch{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:#5b6672;background:none;border:none;padding:0;}' +
+            '.pna-chip{width:52px;height:32px;border-radius:8px;border:3px solid transparent;box-shadow:0 0 0 1px #dde2e8;}' +
+            '.pna-swatch.sel .pna-chip{border-color:#fff;box-shadow:0 0 0 2px #2c3440;}' +
+            '.pna-swatch.sel{color:#1a2027;font-weight:600;}' +
+            '.pna-seg{display:inline-flex;background:#eaeef2;border-radius:9px;padding:3px;gap:3px;}' +
+            '.pna-seg button{border:none;background:none;padding:7px 14px;border-radius:7px;font-size:12px;color:#5f6b76;cursor:pointer;}' +
+            '.pna-seg button.on{background:#2c3440;color:#fff;}' +
+            '.pna-design-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}' +
+            '.pna-mini-phone{width:120px;height:150px;border:5px solid #1d232a;border-radius:16px;position:relative;background:#f4f6f8;margin:6px auto 0;}' +
+            '.pna-mini-fab{position:absolute;bottom:10px;left:calc(50% - 20px);width:40px;height:40px;display:flex;align-items:center;justify-content:center;}' +
+            '.pna-mini-fab svg{width:20px;height:20px;}' +
+            '.psm-dialog.pna-design-dialog{width:520px;}' +
+            '.pna-design-hint{font-size:12px;color:#6b7684;margin:8px 0 0 0;}' +
+            '@media (max-width:640px){.pna-design-grid{grid-template-columns:1fr;}}' +
+            '@media (max-width:600px){' +
+            '.psm-dialog.pna-design-dialog{width:100%;max-width:100%;height:100%;max-height:100%;border-radius:0;}' +
+            '.pna-swatches{gap:8px;}' +
+            '.pna-seg{display:flex;}' +
+            '.pna-seg button{flex:1;padding:10px 6px;}' +
+            '}';
+        document.head.appendChild(style);
+    }
+
+    function applyPreviewBtn(b, theme, shape) {
+        b.style.background = theme.grad;
+        b.style.boxShadow = theme.shadow;
+        b.style.borderRadius = shape.radius;
+    }
+    function swatchGroup(current, gradKey, onPick) {
+        var wrap = adminEl('div', 'pna-swatches');
+        THEMES.forEach(function (t) {
+            var b = adminEl('button', 'pna-swatch' + (t.name === current ? ' sel' : ''));
+            var chip = adminEl('span', 'pna-chip');
+            chip.style.background = t[gradKey];
+            b.appendChild(chip);
+            b.appendChild(adminEl('span', '', t.label));
+            b.setAttribute('data-pna-pick', 'sw:' + t.name);
+            b.onclick = function () { onPick(t.name); };
+            wrap.appendChild(b);
+        });
+        return wrap;
+    }
+    function segGroup(list, current, onPick) {
+        var seg = adminEl('div', 'pna-seg');
+        list.forEach(function (s) {
+            var b = adminEl('button', s.name === current ? 'on' : '', s.label);
+            b.setAttribute('data-pna-pick', 'seg:' + s.name);
+            b.onclick = function () { onPick(s.name); };
+            seg.appendChild(b);
+        });
+        return seg;
+    }
+    function fieldLabel(text, topGap) {
+        var l = adminEl('p', 'psm-field-label', text);
+        if (topGap) l.style.marginTop = '12px';
+        return l;
+    }
+    /** ショートカットボタンのプレビュー（先頭3件のラベル）。 */
+    function buildShortcutPreview(labels, theme, shape) {
+        var box = adminEl('div', 'psm-preview-box');
+        labels.slice(0, 3).forEach(function (text) {
+            var b = adminEl('div', 'psm-preview-btn', text);
+            applyPreviewBtn(b, theme, shape);
+            box.appendChild(b);
+        });
+        return box;
+    }
+    /** ホームボタン（モバイル）のプレビュー。 */
+    function buildHomePreview(theme, homeShapeName) {
+        var phone = adminEl('div', 'pna-mini-phone');
+        var fab = adminEl('div', 'pna-mini-fab');
+        fab.innerHTML = HOME_SVG; // 固定のSVG文字列のみ
+        fab.style.background = theme.homeGrad;
+        fab.style.boxShadow = theme.homeShadow;
+        fab.style.borderRadius = homeShapeByName(homeShapeName).radius;
+        phone.appendChild(fab);
+        return phone;
+    }
+
     /**
      * 保存済み設定（items）に含まれるスペースのうち、候補一覧（spaces）に無いものを個別に解決して spaces に追加する。
      * アプリを1つも持たないスペースは apps.json の spaceId から辿れないため、この処理なしでは
@@ -1527,7 +1649,7 @@
         var loadedSpaces = [];
         var selectedMode = getStorageMode(); // 保存先モード（'app'=共有 / 'local'=この端末だけ）。既定は共有。
 
-        // 現在のテーマ・形状（🎨 / 🔲 の選択値）。モーダルの配色とプレビューに使う。
+        // 現在のテーマ・形状（🎨 のデザイン設定の値）。モーダルの配色とプレビューに使う。
         var theme = getCurrentTheme();
         var shape = getCurrentShape();
 
@@ -2285,7 +2407,116 @@
     }
 
     // ============================================================
-    // 8. ホームボタン部（モバイル。/k/m/ へ戻る丸ボタン。色と形は全体設定と個人設定に従う）
+    // 7b. デザイン設定モーダル（🎨）
+    // ============================================================
+    var isDesignModalOpen = false; // 多重クリックによる二重オープン防止
+
+    /**
+     * 🎨 のデザイン設定モーダルを開く。ショートカットの色・形を選ぶ（ホームボタンはそれに連動）。
+     * @param {Function} onSaved 保存・既定に戻す成功時に呼ばれるコールバック（即時再描画用）
+     */
+    function openDesignSettingsModal(onSaved) {
+        if (isDesignModalOpen) return;
+        isDesignModalOpen = true;
+        var m = null;
+        try {
+            injectModalStyle();
+            injectDesignPartsStyle();
+            refreshGlobalSettings(false); // 保存時の design_rev をなるべく新しくする
+            m = openOverlayFrame('pna-design-dialog', 'デザイン設定', null, 'psm-header');
+            m.afterClose = function () { isDesignModalOpen = false; };
+            buildDesignSettings(m, onSaved);
+        } catch (e) {
+            // 途中で失敗してもフラグを残さない（残ると再読み込みまで 🎨 が開けなくなる）
+            isDesignModalOpen = false;
+            if (m) m.close();
+            console.error('[portal-nav] デザイン設定を開けませんでした', e);
+        }
+    }
+
+    /** デザイン設定モーダルの中身を組み立てる（openDesignSettingsModal から呼ぶ）。 */
+    function buildDesignSettings(m, onSaved) {
+        var initial = currentDesign();
+        var draft = { scTheme: initial.scTheme, scShape: initial.scShape };
+        var labels = loadShortcutSettings().map(function (it) { return it.label || it.targetName || it.targetId; });
+
+        function isDirty() {
+            return draft.scTheme !== initial.scTheme || draft.scShape !== initial.scShape;
+        }
+        function done() {
+            m.onClose = null;
+            m.close();
+            if (onSaved) onSaved();
+        }
+
+        // --- フッター ---
+        var pd = readPersonalDesign();
+        var hasPersonal = pd.scThemeIdx != null || pd.scShapeIdx != null || lget(KEY_HOME_THEME_IDX) != null;
+        var resetBtn = adminEl('button', 'psm-btn', '管理者の既定に戻す');
+        resetBtn.disabled = !hasPersonal;
+        resetBtn.onclick = function () {
+            if (!window.confirm('自分用の色・形を消して、管理者の既定（全体設定）に戻します。よろしいですか？')) return;
+            clearPersonalDesign();
+            done();
+        };
+        m.left.appendChild(resetBtn);
+        var cancelBtn = adminEl('button', 'psm-btn', 'キャンセル');
+        cancelBtn.onclick = function () { m.close(); };
+        var saveBtn = adminEl('button', 'psm-btn psm-btn-primary', '保存');
+        saveBtn.onclick = function () {
+            if (savePersonalDesign(draft.scTheme, draft.scShape)) done();
+        };
+        m.right.appendChild(cancelBtn);
+        m.right.appendChild(saveBtn);
+
+        // ESC・×・背景クリック: 未保存の変更があれば破棄の確認を出す
+        m.onClose = function () {
+            if (isDirty() && !window.confirm('編集中の内容が保存されていません。破棄してよろしいですか？')) return;
+            m.close();
+        };
+
+        function render() {
+            // 作り直しでキーボードフォーカスが失われないよう、フォーカス中の選択ボタンを覚えて戻す
+            var focusKey = null;
+            var ae = document.activeElement;
+            if (ae && ae.getAttribute) focusKey = ae.getAttribute('data-pna-pick');
+            removeAllChildren(m.body);
+            var theme = THEMES[themeIndexByName(draft.scTheme)];
+            var shape = SHAPES[shapeIndexByName(draft.scShape)];
+            m.body.appendChild(adminEl('p', 'psm-intro', 'ショートカットボタンの色と形を選べます。この端末（ブラウザ）だけに保存されます。'));
+            if (initial.forced) {
+                m.body.appendChild(adminEl('p', 'psm-warn', '色・形は管理者設定が適用されています（以前の個人設定は無効になりました）。色か形を変えると保存できます。保存し直すと、あなたの設定が再び優先されます。'));
+            }
+            var card = adminEl('div', 'pna-card');
+            card.appendChild(fieldLabel('色'));
+            card.appendChild(swatchGroup(draft.scTheme, 'grad', function (n) { draft.scTheme = n; render(); }));
+            card.appendChild(fieldLabel('形', true));
+            card.appendChild(segGroup(SHAPES, draft.scShape, function (n) { draft.scShape = n; render(); }));
+            card.appendChild(fieldLabel('プレビュー', true));
+            var grid = adminEl('div', 'pna-design-grid');
+            grid.appendChild(buildShortcutPreview(labels, theme, shape));
+            grid.appendChild(buildHomePreview(theme, homeShapeNameForScShape(draft.scShape)));
+            card.appendChild(grid);
+            card.appendChild(adminEl('p', 'pna-design-hint', 'ホームボタン（モバイル）はショートカットと同じ色・形になります。'));
+            m.body.appendChild(card);
+            // ヘッダーと保存ボタンの色を選択中のテーマに追従させる
+            m.overlay.style.setProperty('--psm-grad', toBackgroundImage(theme.grad));
+            m.overlay.style.setProperty('--psm-base', theme.base);
+            m.overlay.style.setProperty('--psm-tint', theme.tint);
+            // 未変更のまま保存すると全体設定の値を個人設定として固定してしまうため、変更があるときだけ押せる
+            saveBtn.disabled = !isDirty();
+            if (focusKey) {
+                var picks = m.body.querySelectorAll('[data-pna-pick]');
+                for (var i = 0; i < picks.length; i++) {
+                    if (picks[i].getAttribute('data-pna-pick') === focusKey) { picks[i].focus(); break; }
+                }
+            }
+        }
+        render();
+    }
+
+    // ============================================================
+    // 8. ホームボタン部（モバイル。/k/m/ へ戻る丸ボタン。色と形はショートカットの色・形に連動する）
     // ============================================================
 
     /** ホームボタンに、今の有効な色・形を当てる。既定（navy・丸）なら従来と完全に同じ見た目。 */
@@ -2571,6 +2802,7 @@
     var adminOverlayStack = []; // 前面にあるオーバーレイだけが ESC に反応するための管理
 
     function injectAdminStyle() {
+        injectDesignPartsStyle();
         if (document.getElementById(ADMIN_STYLE_ID)) return;
         var style = document.createElement('style');
         style.id = ADMIN_STYLE_ID;
@@ -2585,11 +2817,7 @@
             '.psm-link-admin{font-size:12px;color:#5b6672;background:none;border:1px dashed #c8d0d8;border-radius:8px;padding:7px 10px;cursor:pointer;}' +
             '.psm-link-admin:hover{background:#f2f5f8;}' +
             '.psm-ok{color:#2d7a4f;font-size:13px;margin:0 0 10px 0;}' +
-            '.pna-card{background:#fff;border:1px solid #e6eaef;border-radius:10px;padding:14px;margin-bottom:12px;}' +
-            '.pna-card h3{font-size:13px;margin:0 0 10px 0;}' +
-            '.pna-card .psm-preview-box{background:none;border:none;padding:0;margin-bottom:0;max-height:none;}' +
             '.psm-field{margin-bottom:12px;}' +
-            '.pna-hint{font-size:12px;color:#8b95a1;margin-top:4px;}' +
             '.pna-lock-icon{font-size:34px;text-align:center;margin:4px 0 8px 0;}' +
             '.pna-lock-text{text-align:center;font-size:13px;color:#5b6672;margin:0 0 16px 0;}' +
             '.pna-tabs{display:flex;gap:2px;background:#fff;border-bottom:1px solid #e6eaef;padding:0 14px;overflow-x:auto;}' +
@@ -2607,18 +2835,6 @@
             '.pna-acts{display:flex;gap:6px;margin-top:20px;}' +
             '.pna-icon-btn{width:32px;height:32px;padding:0;border:1px solid #e0e5ea;background:#fff;border-radius:8px;cursor:pointer;font-size:12px;color:#6b7684;}' +
             '.pna-icon-btn:disabled{opacity:.35;cursor:not-allowed;}' +
-            '.pna-swatches{display:flex;flex-wrap:wrap;gap:10px;}' +
-            '.pna-swatch{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;font-size:11px;color:#5b6672;background:none;border:none;padding:0;}' +
-            '.pna-chip{width:52px;height:32px;border-radius:8px;border:3px solid transparent;box-shadow:0 0 0 1px #dde2e8;}' +
-            '.pna-swatch.sel .pna-chip{border-color:#fff;box-shadow:0 0 0 2px #2c3440;}' +
-            '.pna-swatch.sel{color:#1a2027;font-weight:600;}' +
-            '.pna-seg{display:inline-flex;background:#eaeef2;border-radius:9px;padding:3px;gap:3px;}' +
-            '.pna-seg button{border:none;background:none;padding:7px 14px;border-radius:7px;font-size:12px;color:#5f6b76;cursor:pointer;}' +
-            '.pna-seg button.on{background:#2c3440;color:#fff;}' +
-            '.pna-design-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}' +
-            '.pna-mini-phone{width:120px;height:150px;border:5px solid #1d232a;border-radius:16px;position:relative;background:#f4f6f8;margin:6px auto 0;}' +
-            '.pna-mini-fab{position:absolute;bottom:10px;left:calc(50% - 20px);width:40px;height:40px;display:flex;align-items:center;justify-content:center;}' +
-            '.pna-mini-fab svg{width:20px;height:20px;}' +
             '.pna-force-item{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px solid #eef1f4;cursor:pointer;}' +
             '.pna-force-item:first-of-type{border-top:none;}' +
             '.pna-force-item input{margin-top:4px;width:16px;height:16px;}' +
@@ -2627,19 +2843,11 @@
             '.pna-warn{background:#fff7e6;border:1px solid #f3d9a4;color:#7a5200;border-radius:8px;padding:10px 12px;font-size:12px;}' +
             '.pna-confirm-list{margin:0;padding-left:18px;font-size:13px;}' +
             '.pna-confirm-list li{margin:3px 0;}' +
-            '@media (max-width:640px){.pna-design-grid{grid-template-columns:1fr;}}' +
             '@media (max-width:600px){' +
             '.psm-dialog.wide,.psm-dialog.narrow{width:100%;max-width:100%;max-height:100%;height:100%;border-radius:0;}' +
             '.pna-main{grid-template-columns:1fr;}' +
             '}';
         document.head.appendChild(style);
-    }
-
-    function adminEl(tag, cls, text) {
-        var e = document.createElement(tag);
-        if (cls) e.className = cls;
-        if (text != null) e.textContent = text; // 文字列は必ず textContent で入れる（XSS 対策）
-        return e;
     }
 
     /**
@@ -2649,6 +2857,14 @@
     function openAdminOverlay(dialogClass, titleText, badge) {
         injectModalStyle();
         injectAdminStyle();
+        return openOverlayFrame(dialogClass, titleText, badge, 'psm-header admin');
+    }
+
+    /**
+     * オーバーレイの枠の共通部分（CSS の注入は呼び出し側で行う）。
+     * headerClass は 'psm-header admin'（管理者画面）または 'psm-header'（テーマ色のヘッダー）。
+     */
+    function openOverlayFrame(dialogClass, titleText, badge, headerClass) {
         var theme = getCurrentTheme();
 
         var overlay = adminEl('div', 'psm-overlay');
@@ -2656,7 +2872,7 @@
         overlay.style.setProperty('--psm-base', theme.base);
         overlay.style.setProperty('--psm-tint', theme.tint);
         var dialog = adminEl('div', 'psm-dialog ' + (dialogClass || ''));
-        var header = adminEl('div', 'psm-header admin');
+        var header = adminEl('div', headerClass);
         var title = adminEl('h2', 'psm-title', titleText);
         if (badge) title.appendChild(adminEl('span', 'psm-badge', badge));
         var closeBtn = adminEl('button', 'psm-close', '×');
@@ -2942,7 +3158,7 @@
             schemaVersion: GLOBAL_SCHEMA_VERSION,
             settingsRev: 0,
             shortcuts: defaultShortcutList(),
-            design: { scTheme: DEFAULT_DESIGN.scTheme, scShape: DEFAULT_DESIGN.scShape, homeTheme: DEFAULT_DESIGN.homeTheme, homeShape: DEFAULT_DESIGN.homeShape },
+            design: withDerivedHome(DEFAULT_DESIGN),
             shortcutsForceRev: 0,
             designForceRev: 0,
             updatedBy: '',
@@ -2958,7 +3174,7 @@
         var src = settings.shortcuts || defaultShortcutList();
         return {
             shortcuts: src.map(copyShortcutItem),
-            design: { scTheme: settings.design.scTheme, scShape: settings.design.scShape, homeTheme: settings.design.homeTheme, homeShape: settings.design.homeShape },
+            design: withDerivedHome(settings.design),
             forceShortcuts: false,
             forceDesign: false
         };
@@ -3020,12 +3236,6 @@
         }
 
         function themeOfDraft(key) { return THEMES[themeIndexByName(draft.design[key])]; }
-
-        function applyPreviewBtn(b, theme, shape) {
-            b.style.background = theme.grad;
-            b.style.boxShadow = theme.shadow;
-            b.style.borderRadius = shape.radius;
-        }
 
         function renderBody() {
             removeAllChildren(m.body);
@@ -3256,36 +3466,8 @@
         }
 
         // --- タブ: デザイン既定 ---
-        function swatchGroup(current, gradKey, onPick) {
-            var wrap = adminEl('div', 'pna-swatches');
-            THEMES.forEach(function (t) {
-                var b = adminEl('button', 'pna-swatch' + (t.name === current ? ' sel' : ''));
-                var chip = adminEl('span', 'pna-chip');
-                chip.style.background = t[gradKey];
-                b.appendChild(chip);
-                b.appendChild(adminEl('span', '', t.label));
-                b.onclick = function () { onPick(t.name); };
-                wrap.appendChild(b);
-            });
-            return wrap;
-        }
-        function segGroup(list, current, onPick) {
-            var seg = adminEl('div', 'pna-seg');
-            list.forEach(function (s) {
-                var b = adminEl('button', s.name === current ? 'on' : '', s.label);
-                b.onclick = function () { onPick(s.name); };
-                seg.appendChild(b);
-            });
-            return seg;
-        }
-        function fieldLabel(text, topGap) {
-            var l = adminEl('p', 'psm-field-label', text);
-            if (topGap) l.style.marginTop = '12px';
-            return l;
-        }
-
         function renderDesignTab() {
-            m.body.appendChild(adminEl('p', 'psm-intro', '個人設定をしていない利用者に適用される見た目です。利用者は 🎨🔲🏠 で自分用に変更できます（全員に揃えたい場合は「反映方法」タブへ）。'));
+            m.body.appendChild(adminEl('p', 'psm-intro', '個人設定をしていない利用者に適用される見た目です。利用者は 🎨 で自分用に変更できます（ホームボタンはショートカットと同じ色・形になります。全員に揃えたい場合は「反映方法」タブへ）。'));
             var grid = adminEl('div', 'pna-design-grid');
 
             var c1 = adminEl('div', 'pna-card');
@@ -3295,36 +3477,17 @@
             c1.appendChild(fieldLabel('形', true));
             c1.appendChild(segGroup(SHAPES, draft.design.scShape, function (n) { draft.design.scShape = n; mark('ds'); renderBody(); }));
             c1.appendChild(fieldLabel('プレビュー', true));
-            var pv = adminEl('div', 'psm-preview-box');
-            var t = themeOfDraft('scTheme');
-            var s = SHAPES[shapeIndexByName(draft.design.scShape)];
-            draft.shortcuts.slice(0, 3).forEach(function (it) {
-                var b = adminEl('div', 'psm-preview-btn', it.label || it.targetName || '（未設定）');
-                applyPreviewBtn(b, t, s);
-                pv.appendChild(b);
-            });
-            c1.appendChild(pv);
+            c1.appendChild(buildShortcutPreview(
+                draft.shortcuts.map(function (it) { return it.label || it.targetName || '（未設定）'; }),
+                themeOfDraft('scTheme'),
+                SHAPES[shapeIndexByName(draft.design.scShape)]
+            ));
 
             var c2 = adminEl('div', 'pna-card');
             c2.appendChild(adminEl('h3', '', 'ホームボタン（モバイル）'));
-            c2.appendChild(fieldLabel('色'));
-            c2.appendChild(swatchGroup(draft.design.homeTheme, 'homeGrad', function (n) { draft.design.homeTheme = n; mark('ds'); renderBody(); }));
-            c2.appendChild(fieldLabel('形', true));
-            c2.appendChild(segGroup(HOME_SHAPES, draft.design.homeShape, function (n) { draft.design.homeShape = n; mark('ds'); renderBody(); }));
+            c2.appendChild(adminEl('p', 'pna-hint', 'ショートカットボタンと同じ色・形になります（カプセル→丸、角丸→角丸）。'));
             c2.appendChild(fieldLabel('プレビュー', true));
-            var phone = adminEl('div', 'pna-mini-phone');
-            var fab = adminEl('div', 'pna-mini-fab');
-            fab.innerHTML = HOME_SVG; // 固定のSVG文字列のみ
-            var ht = themeOfDraft('homeTheme');
-            fab.style.background = ht.homeGrad;
-            fab.style.boxShadow = ht.homeShadow;
-            fab.style.borderRadius = homeShapeByName(draft.design.homeShape).radius;
-            phone.appendChild(fab);
-            c2.appendChild(phone);
-            var sync = adminEl('button', 'psm-btn', 'ショートカットと同じ色にする');
-            sync.style.marginTop = '10px';
-            sync.onclick = function () { draft.design.homeTheme = draft.design.scTheme; mark('ds'); renderBody(); };
-            c2.appendChild(sync);
+            c2.appendChild(buildHomePreview(themeOfDraft('scTheme'), homeShapeNameForScShape(draft.design.scShape)));
 
             grid.appendChild(c1);
             grid.appendChild(c2);
@@ -3337,7 +3500,7 @@
             m.body.appendChild(adminEl('p', 'psm-intro', '通常は、利用者が自分で変えた設定（個人設定）が優先されます。全員に揃えたいときだけチェックしてください。'));
             var card = adminEl('div', 'pna-card');
             [['forceShortcuts', 'ショートカットの並びを全員に強制反映', '保存時点より前の個人設定（遷移先・表示名・並び順）を無効にし、全員にこの既定値を表示します。'],
-             ['forceDesign', 'デザイン（色・形・ホームボタンの色）を全員に強制反映', '保存時点より前の 🎨🔲🏠 の個人設定を無効にします。']].forEach(function (d) {
+             ['forceDesign', 'デザイン（色・形。ホームボタンも連動）を全員に強制反映', '保存時点より前の 🎨 の個人設定（色・形）を無効にします。']].forEach(function (d) {
                 var item = adminEl('label', 'pna-force-item');
                 var cb = adminEl('input');
                 cb.type = 'checkbox';
@@ -3706,7 +3869,7 @@
                 btn.style.borderRadius = shape.radius;
                 btn.style.setProperty('--pst-base', theme.base); // フォーカス枠の色
             });
-            // 🎨🔲🏠⚙️ のフォーカス枠色もテーマに合わせる（コンテナ経由で継承）
+            // 🎨⚙️ のフォーカス枠色もテーマに合わせる（コンテナ経由で継承）
             var configEl = document.getElementById(CONFIG_ID);
             if (configEl) {
                 configEl.style.setProperty('--pst-base', theme.base);
@@ -3729,28 +3892,12 @@
             applyHomeDesignToExisting();
         };
 
-        var colorBtn = createConfigBtn('🎨', '色を変更');
-        colorBtn.onclick = function () {
-            // 今の有効な色の次へ（強制反映で個人設定が無効なら、全体設定の色の次）
-            var next = (themeIndexByName(currentDesign().scTheme) + 1) % THEMES.length;
-            writePersonalDesign('scTheme', next);
-            updateStyles();
-        };
-
-        var shapeBtn = createConfigBtn('🔲', '形を変更');
-        shapeBtn.onclick = function () {
-            var next = (shapeIndexByName(currentDesign().scShape) + 1) % SHAPES.length;
-            writePersonalDesign('scShape', next);
-            updateStyles();
-        };
-
-        // ホームボタン（モバイル）の色。同じ localStorage を使うので、PC ブラウザで変えても同じ端末のモバイル版に効く
-        var homeColorBtn = createConfigBtn('🏠', 'ホームボタンの色を変更（この端末のみ）');
-        homeColorBtn.onclick = function () {
-            var next = (themeIndexByName(currentDesign().homeTheme) + 1) % THEMES.length;
-            writePersonalDesign('homeTheme', next);
-            updateStyles();
-            applyHomeDesignToExisting();
+        var designBtn = createConfigBtn('🎨', '色・形を変更');
+        designBtn.onclick = function () {
+            openDesignSettingsModal(function () {
+                updateStyles();
+                applyHomeDesignToExisting();
+            });
         };
 
         var settingsBtn = createConfigBtn('⚙️', 'ショートカットを編集');
@@ -3758,9 +3905,7 @@
             openShortcutSettingsModal(redrawShortcuts);
         };
 
-        PortalCustomize.addConfigItem(colorBtn);
-        PortalCustomize.addConfigItem(shapeBtn);
-        PortalCustomize.addConfigItem(homeColorBtn);
+        PortalCustomize.addConfigItem(designBtn);
         PortalCustomize.addConfigItem(settingsBtn);
 
         return event;
@@ -3807,7 +3952,12 @@
             isAuthSessionValid: isAuthSessionValid,
             isConflictError: isConflictError,
             refreshGlobalSettings: refreshGlobalSettings,
-            writePersonalDesign: writePersonalDesign,
+            savePersonalDesign: savePersonalDesign,
+            clearPersonalDesign: clearPersonalDesign,
+            readPersonalDesign: readPersonalDesign,
+            homeShapeNameForScShape: homeShapeNameForScShape,
+            withDerivedHome: withDerivedHome,
+            openDesignSettingsModal: openDesignSettingsModal,
             checkAdminRights: checkAdminRights,
             setupHomeButton: setupHomeButton,
             constants: {
