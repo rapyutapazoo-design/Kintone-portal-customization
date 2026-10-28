@@ -1,0 +1,823 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>管理者設定画面モック（ポータルナビ統合版）</title>
+<style>
+/* =========================================================
+ * ページ全体（モックアップの外枠）
+ * ========================================================= */
+:root {
+    --page-bg: #eef1f5;
+    --panel-bg: #ffffff;
+    --text: #1a2027;
+    --text-sub: #5b6672;
+    --line: #dde2e8;
+    --accent: #154260;
+}
+* { box-sizing: border-box; }
+body {
+    margin: 0;
+    background: var(--page-bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", Meiryo, sans-serif;
+    line-height: 1.6;
+}
+.page { max-width: 1080px; margin: 0 auto; padding: 24px 16px 64px; }
+.page h1 { font-size: 22px; margin: 0 0 4px; }
+.page .lead { color: var(--text-sub); margin: 0 0 20px; font-size: 14px; }
+.page h2 { font-size: 17px; margin: 32px 0 12px; padding-left: 10px; border-left: 4px solid var(--accent); }
+.note { font-size: 13px; color: var(--text-sub); margin: 6px 0 0; }
+
+/* 操作パネル（モックの状態切り替え） */
+.controls {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 24px;
+    background: var(--panel-bg); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px;
+}
+.controls .ctl-title { font-size: 12px; font-weight: 600; color: var(--text-sub); margin: 0 0 6px; }
+.controls label { display: flex; gap: 6px; align-items: center; font-size: 14px; cursor: pointer; }
+.state-box {
+    margin-top: 12px; background: #0f1720; color: #cfe3f5; border-radius: 10px; padding: 12px 14px;
+    font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-x: auto;
+}
+
+/* 疑似ポータル（PC） */
+.stage { display: grid; grid-template-columns: 1fr 300px; gap: 20px; align-items: start; }
+@media (max-width: 860px) { .stage { grid-template-columns: 1fr; } }
+.portal {
+    background: #fff; border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+}
+.portal-bar { background: #f7f9fb; border-bottom: 1px solid var(--line); padding: 8px 14px; font-size: 12px; color: var(--text-sub); }
+.portal-body { padding: 0 20px 20px; }
+.pc-container { display: flex; flex-wrap: wrap; gap: 15px; align-items: center; padding: 20px 0 24px; }
+.sc-btn {
+    padding: 12px 22px; color: #fff; font-weight: bold; font-size: 14px; text-decoration: none;
+    border: none; cursor: pointer; white-space: nowrap;
+}
+.cfg-group { display: flex; gap: 8px; margin-left: 10px; }
+.cfg-btn {
+    width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--line); background: #fff;
+    cursor: pointer; font-size: 17px; display: flex; align-items: center; justify-content: center;
+}
+.cfg-btn:hover { background: #f2f5f8; }
+.portal-dummy { height: 90px; border-radius: 8px; background: repeating-linear-gradient(45deg, #f4f6f8, #f4f6f8 10px, #eef1f4 10px, #eef1f4 20px); }
+
+/* 疑似スマホ（ホームボタン） */
+.phone {
+    width: 300px; height: 520px; margin: 0 auto; border: 10px solid #1d232a; border-radius: 34px;
+    background: #fff; position: relative; overflow: hidden;
+}
+.phone-head { background: #f7f9fb; border-bottom: 1px solid var(--line); padding: 10px 12px; font-size: 12px; color: var(--text-sub); }
+.phone-row { margin: 10px 12px; height: 46px; border-radius: 8px; background: #f2f4f7; }
+.home-fab {
+    position: absolute; bottom: 16px; left: calc(50% - 28px); width: 56px; height: 56px;
+    display: flex; align-items: center; justify-content: center;
+}
+.phone-caption { text-align: center; font-size: 12px; color: var(--text-sub); margin-top: 8px; }
+
+/* =========================================================
+ * モーダル共通（portal-shortcut.js の psm-* デザインに準拠）
+ * ========================================================= */
+.psm-overlay {
+    position: fixed; inset: 0; background: rgba(17,24,32,.45); backdrop-filter: blur(2px);
+    z-index: 1000; display: flex; align-items: center; justify-content: center;
+    opacity: 0; transition: opacity 150ms ease;
+}
+.psm-overlay.psm-visible { opacity: 1; }
+.psm-dialog {
+    background: #fff; border-radius: 14px; width: 560px; max-width: 92vw; max-height: 88vh;
+    display: flex; flex-direction: column; overflow: hidden;
+    box-shadow: 0 1px 2px rgba(0,0,0,.05), 0 16px 48px rgba(0,0,0,.16);
+    transform: scale(.97) translateY(10px); transition: transform 200ms cubic-bezier(.2,.8,.3,1);
+}
+.psm-dialog.wide { width: 760px; }
+.psm-dialog.narrow { width: 400px; }
+.psm-overlay.psm-visible .psm-dialog { transform: none; }
+.psm-header {
+    display: flex; justify-content: space-between; align-items: center; padding: 16px 22px;
+    background-image: linear-gradient(rgba(0,0,0,.12), rgba(0,0,0,.12)), var(--psm-grad);
+}
+.psm-header.admin { background-image: linear-gradient(135deg, #2c3440 0%, #4a5563 100%); }
+.psm-title { font-size: 16px; font-weight: 500; margin: 0; color: #fff; display: flex; align-items: center; gap: 8px; }
+.psm-badge { font-size: 11px; background: rgba(255,255,255,.2); border-radius: 10px; padding: 1px 8px; }
+.psm-close {
+    width: 26px; height: 26px; border: none; border-radius: 50%; cursor: pointer;
+    background: rgba(255,255,255,.18); color: #fff; font-size: 16px; line-height: 1;
+}
+.psm-body { padding: 16px 22px; overflow-y: auto; flex: 1; background: #f6f8fa; }
+.psm-intro { font-size: 13px; color: #6b7684; margin: 0 0 14px; }
+.psm-footer {
+    display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;
+    padding: 14px 22px; border-top: 1px solid #e6eaef; background: #fff;
+}
+.psm-footer-left, .psm-footer-right { display: flex; gap: 8px; align-items: center; }
+.psm-btn {
+    padding: 9px 14px; border-radius: 8px; font-size: 13px; cursor: pointer;
+    border: 1px solid #dde2e8; background: #fff; color: #3d4650;
+}
+.psm-btn:hover:not(:disabled) { background: #f2f5f8; }
+.psm-btn:disabled { opacity: .4; cursor: not-allowed; }
+.psm-btn-primary { border: none; background-image: var(--psm-grad); color: #fff; padding: 9px 18px; }
+.psm-btn-primary:hover:not(:disabled) { filter: brightness(1.08); background-image: var(--psm-grad); }
+.psm-btn-dark { border: none; background: #2c3440; color: #fff; padding: 9px 18px; }
+.psm-btn-dark:hover:not(:disabled) { background: #3b4552; }
+.psm-link-admin {
+    font-size: 12px; color: #5b6672; background: none; border: 1px dashed #c8d0d8; border-radius: 8px;
+    padding: 7px 10px; cursor: pointer;
+}
+.psm-link-admin:hover { background: #f2f5f8; }
+.psm-field { display: flex; flex-direction: column; margin-bottom: 12px; }
+.psm-field-label { font-size: 11px; font-weight: 600; color: #6b7684; letter-spacing: .04em; margin: 0 0 5px; }
+.psm-input, .psm-select {
+    padding: 10px 12px; border: 1px solid #d8dee4; border-radius: 8px; font-size: 13px; width: 100%;
+    background: #fff; color: #1a2027;
+}
+.psm-input:focus, .psm-select:focus { outline: none; border-color: #2c3440; box-shadow: 0 0 0 3px #e3e7ec; }
+.psm-error { color: #c0392b; font-size: 13px; margin: 0 0 10px; }
+.psm-ok { color: #2d7a4f; font-size: 13px; margin: 0 0 10px; }
+.psm-card { background: #fff; border: 1px solid #e6eaef; border-radius: 10px; padding: 14px; margin-bottom: 12px; }
+.psm-card h3 { font-size: 13px; margin: 0 0 10px; }
+.psm-preview-box { display: flex; flex-wrap: wrap; gap: 6px; }
+.psm-preview-btn { padding: 8px 10px; font-size: 11px; font-weight: bold; color: #fff; }
+
+/* 利用者 ⚙️ モーダル（簡略版） */
+.u-row { display: flex; gap: 10px; align-items: center; background: #fff; border: 1px solid #e6eaef; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; font-size: 13px; }
+.u-row .num { width: 22px; height: 22px; border-radius: 50%; background: #dbe9f5; color: #154260; font-size: 11px; display: flex; align-items: center; justify-content: center; }
+
+/* パスワード画面 */
+.lock-icon { font-size: 34px; text-align: center; margin: 4px 0 8px; }
+.lock-text { text-align: center; font-size: 13px; color: #5b6672; margin: 0 0 16px; }
+.hint { font-size: 12px; color: #8b95a1; margin-top: 4px; }
+
+/* 管理者画面: タブ */
+.adm-tabs { display: flex; gap: 2px; background: #fff; border-bottom: 1px solid #e6eaef; padding: 0 14px; overflow-x: auto; }
+.adm-tab {
+    padding: 11px 14px; font-size: 13px; color: #5b6672; background: none; border: none; cursor: pointer;
+    border-bottom: 2px solid transparent; white-space: nowrap;
+}
+.adm-tab.active { color: #1a2027; font-weight: 600; border-bottom-color: #2c3440; }
+.adm-tab .dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #e67e22; margin-left: 5px; vertical-align: middle; }
+.adm-meta { font-size: 12px; color: #6b7684; background: #fff; border: 1px solid #e6eaef; border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; display: flex; flex-wrap: wrap; gap: 4px 18px; }
+.adm-banner { border-radius: 8px; padding: 10px 12px; font-size: 13px; margin-bottom: 12px; display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.adm-banner.err { background: #fdecea; color: #a12a1d; border: 1px solid #f5c2bc; }
+.adm-banner.ok { background: #e8f5ee; color: #22603e; border: 1px solid #bfe2cd; }
+
+/* 管理者画面: ショートカット行 */
+.sc-row { display: flex; gap: 10px; align-items: flex-start; background: #fff; border: 1px solid #e6eaef; border-radius: 10px; padding: 12px; margin-bottom: 8px; flex-wrap: wrap; }
+.sc-row .num { flex: 0 0 auto; width: 24px; height: 24px; border-radius: 50%; background: #e3e7ec; color: #2c3440; font-size: 11px; display: flex; align-items: center; justify-content: center; margin-top: 22px; }
+.sc-row .main { flex: 1; min-width: 200px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.sc-row .main .psm-field { margin: 0; }
+.sc-row .acts { display: flex; gap: 6px; margin-top: 20px; }
+.icon-btn { width: 32px; height: 32px; border: 1px solid #e0e5ea; background: #fff; border-radius: 8px; cursor: pointer; font-size: 12px; color: #6b7684; }
+.icon-btn:disabled { opacity: .35; cursor: not-allowed; }
+@media (max-width: 600px) { .sc-row .main { grid-template-columns: 1fr; } }
+
+/* 管理者画面: デザイン選択 */
+.swatches { display: flex; flex-wrap: wrap; gap: 10px; }
+.swatch {
+    display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; font-size: 11px; color: #5b6672;
+    background: none; border: none; padding: 0;
+}
+.swatch .chip { width: 52px; height: 32px; border-radius: 8px; border: 3px solid transparent; box-shadow: 0 0 0 1px #dde2e8; }
+.swatch.sel .chip { border-color: #fff; box-shadow: 0 0 0 2px #2c3440; }
+.swatch.sel { color: #1a2027; font-weight: 600; }
+.seg { display: inline-flex; background: #eaeef2; border-radius: 9px; padding: 3px; gap: 3px; }
+.seg button { border: none; background: none; padding: 7px 14px; border-radius: 7px; font-size: 12px; color: #5f6b76; cursor: pointer; }
+.seg button.on { background: #2c3440; color: #fff; }
+.design-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 640px) { .design-grid { grid-template-columns: 1fr; } }
+.mini-phone { width: 120px; height: 150px; border: 5px solid #1d232a; border-radius: 16px; position: relative; background: #f4f6f8; margin: 6px auto 0; }
+.mini-fab { position: absolute; bottom: 10px; left: calc(50% - 20px); width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; }
+
+/* 管理者画面: 反映方法 */
+.force-item { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; border-top: 1px solid #eef1f4; }
+.force-item:first-of-type { border-top: none; }
+.force-item input { margin-top: 4px; width: 16px; height: 16px; }
+.force-item .t { font-size: 14px; font-weight: 600; }
+.force-item .d { font-size: 12px; color: #6b7684; }
+.warn-box { background: #fff7e6; border: 1px solid #f3d9a4; color: #7a5200; border-radius: 8px; padding: 10px 12px; font-size: 12px; }
+
+/* 確認ダイアログ */
+.confirm-list { margin: 0; padding-left: 18px; font-size: 13px; }
+.confirm-list li { margin: 3px 0; }
+
+@media (max-width: 600px) {
+    .psm-overlay { align-items: stretch; }
+    .psm-dialog, .psm-dialog.wide, .psm-dialog.narrow { width: 100%; max-width: 100%; max-height: 100%; height: 100%; border-radius: 0; }
+    .psm-input, .psm-select { font-size: 16px; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+    <h1>管理者設定画面モック（ポータルナビ統合版）</h1>
+    <p class="lead">
+        ホームボタンとショートカットボタンを1ファイルに統合し、既定値を「全体設定アプリ」で管理する場合の画面イメージです。<br>
+        ポータルの ⚙️ →「🔒 管理者設定」→ パスワード → 管理者画面 の順に操作できます。データは保存されず、再読み込みすると元に戻ります。
+    </p>
+
+    <h2>モックの状態切り替え</h2>
+    <div class="controls">
+        <div>
+            <p class="ctl-title">ログイン中の人</p>
+            <label><input type="radio" name="who" value="admin" checked> 管理者グループの人（全体設定を編集できる）</label>
+            <label><input type="radio" name="who" value="user"> 一般ユーザー（入口が表示されない）</label>
+        </div>
+        <div>
+            <p class="ctl-title">パスワード</p>
+            <label><input type="radio" name="pw" value="set" checked> 設定済み（デモ用: <code>demo1234</code>）</label>
+            <label><input type="radio" name="pw" value="none"> 未設定（初回設定の画面になる）</label>
+        </div>
+        <div>
+            <p class="ctl-title">利用者の個人設定</p>
+            <label><input type="checkbox" id="ctl-personal" checked> 個人設定あり（緑・角丸・並び替え済み）</label>
+            <p class="note">強制反映の効果を確かめるときに使います。</p>
+        </div>
+        <div>
+            <p class="ctl-title">同時編集</p>
+            <label><input type="checkbox" id="ctl-conflict"> 次の保存の前に、他の管理者が先に保存したことにする</label>
+        </div>
+    </div>
+
+    <h2>画面に表示される結果</h2>
+    <div class="stage">
+        <div class="portal">
+            <div class="portal-bar">PC版ポータル（ショートカット部）</div>
+            <div class="portal-body">
+                <div class="pc-container" id="pc-container"></div>
+                <div class="portal-dummy"></div>
+                <p class="note" id="pc-source"></p>
+            </div>
+        </div>
+        <div>
+            <div class="phone">
+                <div class="phone-head">モバイル版 レコード一覧</div>
+                <div class="phone-row"></div><div class="phone-row"></div><div class="phone-row"></div>
+                <div class="phone-row"></div><div class="phone-row"></div><div class="phone-row"></div>
+                <a class="home-fab" id="home-fab" title="ホーム"></a>
+            </div>
+            <p class="phone-caption" id="home-source"></p>
+        </div>
+    </div>
+
+    <h2>全体設定アプリに保存される内容（settings_json のイメージ）</h2>
+    <div class="state-box" id="state-box"></div>
+    <p class="note">auth_json（パスワードのハッシュ）は管理者グループだけが閲覧できるフィールドに保存され、一般ユーザーには届きません。</p>
+</div>
+
+<script>
+(function () {
+    "use strict";
+
+    // ============================================================
+    // 定数（portal-shortcut.js の THEMES / SHAPES と同じ値）
+    // ============================================================
+    var THEMES = [
+        { name: 'navy', label: 'ネイビー', grad: 'linear-gradient(135deg, #154260 0%, #2b7bc0 100%)', homeGrad: 'linear-gradient(135deg, #2b7bc0 0%, #154260 100%)', shadow: '0 4px 10px rgba(21, 66, 96, 0.4)' },
+        { name: 'green', label: 'グリーン', grad: 'linear-gradient(135deg, #134E5E 0%, #71B280 100%)', homeGrad: 'linear-gradient(135deg, #71B280 0%, #134E5E 100%)', shadow: '0 4px 10px rgba(19, 78, 94, 0.4)' },
+        { name: 'purple', label: 'パープル', grad: 'linear-gradient(135deg, #4b134f 0%, #c94b4b 100%)', homeGrad: 'linear-gradient(135deg, #c94b4b 0%, #4b134f 100%)', shadow: '0 4px 10px rgba(75, 19, 79, 0.4)' },
+        { name: 'standard', label: 'スタンダード', grad: 'linear-gradient(#3498db, #3498db)', homeGrad: 'linear-gradient(#3498db, #3498db)', shadow: '0 4px 10px rgba(52, 152, 219, 0.4)' }
+    ];
+    var SC_SHAPES = [{ name: 'capsule', label: 'カプセル', radius: '30px' }, { name: 'rounded', label: '角丸', radius: '8px' }];
+    var HOME_SHAPES = [{ name: 'circle', label: '丸', radius: '50%' }, { name: 'rounded', label: '角丸', radius: '16px' }];
+    var MIN_SC = 4, MAX_SC = 6;
+    var HOME_SVG = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M10 20V14H14V20H19V12H22L12 3L2 12H5V20H10Z" fill="white"/></svg>';
+
+    // ダミーの候補（実装では /k/v1/apps.json と space.json から取得）
+    var APPS = [
+        { id: 'demo-app-1', name: '管理規約' }, { id: 'demo-app-2', name: '意見書' }, { id: 'demo-app-3', name: '施設予約' },
+        { id: 'demo-app-4', name: 'カレンダー' }, { id: 'demo-app-5', name: 'お知らせ' }, { id: 'demo-app-6', name: '備品管理' }
+    ];
+    var SPACES = [{ id: 'demo-space-1', name: '理事会' }, { id: 'demo-space-2', name: '広報委員会' }];
+
+    // ============================================================
+    // 状態
+    // ============================================================
+    var global = {
+        revision: 12,
+        updatedBy: '佐藤（管理者）',
+        updatedAt: '2026-10-27 18:20',
+        shortcuts: [
+            { type: 'app', targetId: 'demo-app-1', label: '管理規約' },
+            { type: 'app', targetId: 'demo-app-2', label: '意見書' },
+            { type: 'app', targetId: 'demo-app-3', label: '施設予約' },
+            { type: 'app', targetId: 'demo-app-4', label: 'カレンダー' }
+        ],
+        design: { scTheme: 'navy', scShape: 'capsule', homeTheme: 'navy', homeShape: 'circle' },
+        shortcutsForceRev: 0,
+        designForceRev: 0
+    };
+    // 利用者の個人設定（baseRev = 保存した時点の全体設定の改訂番号）
+    var personal = {
+        shortcuts: [
+            { type: 'app', targetId: 'demo-app-3', label: '施設予約' },
+            { type: 'space', targetId: 'demo-space-1', label: '理事会' },
+            { type: 'app', targetId: 'demo-app-1', label: '規約' },
+            { type: 'app', targetId: 'demo-app-4', label: 'カレンダー' },
+            { type: 'app', targetId: 'demo-app-6', label: '備品' }
+        ],
+        shortcutsRev: 10,
+        design: { scTheme: 'green', scShape: 'rounded', homeTheme: 'green' },
+        designRev: 10
+    };
+    var passwordHash = 'demo1234'; // モックのため平文比較。実装では PBKDF2 ハッシュを照合する
+    var failCount = 0, lockUntil = 0;
+    var authedUntil = 0; // sessionStorage に残す認証状態の代わり
+
+    function $(id) { return document.getElementById(id); }
+    function themeOf(name) { for (var i = 0; i < THEMES.length; i++) if (THEMES[i].name === name) return THEMES[i]; return THEMES[0]; }
+    function shapeOf(list, name) { for (var i = 0; i < list.length; i++) if (list[i].name === name) return list[i]; return list[0]; }
+    function clone(o) { return JSON.parse(JSON.stringify(o)); }
+    function isAdmin() { return document.querySelector('input[name="who"]:checked').value === 'admin'; }
+    function hasPersonal() { return $('ctl-personal').checked; }
+    function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+    // ============================================================
+    // 優先順位の解決（個人設定 → 全体設定）
+    // ============================================================
+    function effective() {
+        var usePersonalSc = hasPersonal() && personal.shortcutsRev >= global.shortcutsForceRev;
+        var usePersonalDs = hasPersonal() && personal.designRev >= global.designForceRev;
+        var d = clone(global.design);
+        if (usePersonalDs) {
+            d.scTheme = personal.design.scTheme;
+            d.scShape = personal.design.scShape;
+            d.homeTheme = personal.design.homeTheme;
+        }
+        return {
+            shortcuts: usePersonalSc ? personal.shortcuts : global.shortcuts,
+            design: d,
+            scFrom: usePersonalSc ? '個人設定' : '全体設定（管理者の既定値）',
+            dsFrom: usePersonalDs ? '個人設定' : '全体設定（管理者の既定値）'
+        };
+    }
+
+    // ============================================================
+    // 疑似ポータル・ホームボタンの描画
+    // ============================================================
+    function renderStage() {
+        var eff = effective();
+        var t = themeOf(eff.design.scTheme), s = shapeOf(SC_SHAPES, eff.design.scShape);
+        var c = $('pc-container');
+        c.innerHTML = '';
+        eff.shortcuts.forEach(function (item) {
+            var b = el('a', 'sc-btn', (item.type === 'space' ? '📁 ' : '') + item.label);
+            b.style.background = t.grad; b.style.boxShadow = t.shadow; b.style.borderRadius = s.radius;
+            c.appendChild(b);
+        });
+        var cfg = el('div', 'cfg-group');
+        [['🎨', '色を変更', cycleTheme], ['🔲', '形を変更', cycleShape], ['🏠', 'ホームボタンの色を変更', cycleHome], ['⚙️', 'ショートカットを編集', openUserModal]].forEach(function (d) {
+            var b = el('button', 'cfg-btn', d[0]); b.title = d[1]; b.onclick = d[2]; cfg.appendChild(b);
+        });
+        c.appendChild(cfg);
+        $('pc-source').textContent = 'ショートカット: ' + eff.scFrom + ' ／ 色・形: ' + eff.dsFrom +
+            '（🎨🔲🏠 は利用者が自分用に変える個人設定。⚙️ から管理者設定へ）';
+
+        var ht = themeOf(eff.design.homeTheme), hs = shapeOf(HOME_SHAPES, eff.design.homeShape);
+        var fab = $('home-fab');
+        fab.innerHTML = HOME_SVG;
+        fab.style.background = ht.homeGrad; fab.style.boxShadow = ht.shadow; fab.style.borderRadius = hs.radius;
+        $('home-source').textContent = 'ホームボタンの色: ' + eff.dsFrom + ' ／ 形: 全体設定';
+
+        $('state-box').textContent = JSON.stringify({
+            revision: global.revision,
+            shortcuts: global.shortcuts,
+            design: global.design,
+            shortcutsForceRev: global.shortcutsForceRev,
+            designForceRev: global.designForceRev
+        }, null, 2);
+    }
+
+    // 利用者側の個人設定変更（🎨🔲🏠）。保存時点の改訂番号を記録する
+    function ensurePersonal() {
+        if (!hasPersonal()) {
+            $('ctl-personal').checked = true;
+            personal.design = clone(global.design);
+            personal.shortcuts = clone(global.shortcuts);
+            personal.shortcutsRev = global.revision;
+        }
+        personal.designRev = global.revision;
+    }
+    function nextName(list, cur) { for (var i = 0; i < list.length; i++) if (list[i].name === cur) return list[(i + 1) % list.length].name; return list[0].name; }
+    function cycleTheme() { var cur = effective().design.scTheme; ensurePersonal(); personal.design.scTheme = nextName(THEMES, cur); renderStage(); }
+    function cycleShape() { var cur = effective().design.scShape; ensurePersonal(); personal.design.scShape = nextName(SC_SHAPES, cur); renderStage(); }
+    function cycleHome() { var cur = effective().design.homeTheme; ensurePersonal(); personal.design.homeTheme = nextName(THEMES, cur); renderStage(); }
+
+    // ============================================================
+    // モーダル共通
+    // ============================================================
+    function openOverlay(dialogClass, headerClass, titleText, badge) {
+        var overlay = el('div', 'psm-overlay');
+        overlay.style.setProperty('--psm-grad', themeOf(effective().design.scTheme).grad);
+        var dialog = el('div', 'psm-dialog ' + (dialogClass || ''));
+        var header = el('div', 'psm-header ' + (headerClass || ''));
+        var title = el('h2', 'psm-title', titleText);
+        if (badge) title.appendChild(el('span', 'psm-badge', badge));
+        var close = el('button', 'psm-close', '×');
+        header.appendChild(title); header.appendChild(close);
+        var body = el('div', 'psm-body');
+        var footer = el('div', 'psm-footer');
+        var fl = el('div', 'psm-footer-left'), fr = el('div', 'psm-footer-right');
+        footer.appendChild(fl); footer.appendChild(fr);
+        dialog.appendChild(header); dialog.appendChild(body); dialog.appendChild(footer);
+        overlay.appendChild(dialog);
+        document.body.appendChild(overlay);
+        requestAnimationFrame(function () { requestAnimationFrame(function () { overlay.classList.add('psm-visible'); }); });
+        var api = {
+            overlay: overlay, body: body, left: fl, right: fr, onClose: null,
+            close: function () {
+                overlay.classList.remove('psm-visible');
+                setTimeout(function () { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }, 200);
+            }
+        };
+        close.onclick = function () { (api.onClose || api.close)(); };
+        overlay.addEventListener('mousedown', function (e) { if (e.target === overlay) (api.onClose || api.close)(); });
+        return api;
+    }
+
+    // ============================================================
+    // 利用者の ⚙️ モーダル（簡略版。下部に管理者設定の入口）
+    // ============================================================
+    function openUserModal() {
+        var m = openOverlay('', '', 'ショートカット設定');
+        m.body.appendChild(el('p', 'psm-intro', '（利用者用の編集画面は現行どおり。このモックでは表示のみ簡略化しています）'));
+        effective().shortcuts.forEach(function (item, i) {
+            var r = el('div', 'u-row');
+            r.appendChild(el('span', 'num', String(i + 1)));
+            r.appendChild(el('span', '', (item.type === 'space' ? '📁 ' : '') + item.label));
+            m.body.appendChild(r);
+        });
+        if (isAdmin()) {
+            var adm = el('button', 'psm-link-admin', '🔒 管理者設定');
+            adm.title = '全ユーザーの既定値を変更します（管理者のみ）';
+            adm.onclick = function () { m.close(); setTimeout(openAuth, 120); };
+            m.left.appendChild(adm);
+        } else {
+            m.left.appendChild(el('span', 'hint', '※ 一般ユーザーには「管理者設定」は表示されません'));
+        }
+        var cancel = el('button', 'psm-btn', 'キャンセル'); cancel.onclick = m.close;
+        var save = el('button', 'psm-btn psm-btn-primary', '保存'); save.onclick = m.close;
+        m.right.appendChild(cancel); m.right.appendChild(save);
+    }
+
+    // ============================================================
+    // パスワード認証（初回は設定画面）
+    // ============================================================
+    function openAuth() {
+        if (Date.now() < authedUntil) { openAdmin(); return; }
+        var isInitial = document.querySelector('input[name="pw"]:checked').value === 'none';
+        var m = openOverlay('narrow', 'admin', isInitial ? '管理者パスワードの初回設定' : '管理者認証');
+        m.body.appendChild(el('div', 'lock-icon', isInitial ? '🛡️' : '🔒'));
+        m.body.appendChild(el('p', 'lock-text', isInitial
+            ? 'まだ管理者パスワードが設定されていません。全体設定の編集権限がある方だけが設定できます。'
+            : '全ユーザーの既定値を変更する画面です。管理者パスワードを入力してください。'));
+        var err = el('p', 'psm-error'); err.style.display = 'none';
+        m.body.appendChild(err);
+
+        function field(label, ph) {
+            var f = el('div', 'psm-field');
+            f.appendChild(el('label', 'psm-field-label', label));
+            var i = el('input', 'psm-input'); i.type = 'password'; i.placeholder = ph || '';
+            f.appendChild(i); m.body.appendChild(f);
+            return i;
+        }
+        var p1 = field(isInitial ? '新しいパスワード（8文字以上）' : 'パスワード');
+        var p2 = isInitial ? field('確認のためもう一度') : null;
+        if (!isInitial) m.body.appendChild(el('p', 'hint', 'デモ用パスワード: demo1234 ／ 5回続けて間違えると、しばらく入力できなくなります。'));
+        setTimeout(function () { p1.focus(); }, 220);
+
+        var cancel = el('button', 'psm-btn', 'キャンセル'); cancel.onclick = m.close;
+        var ok = el('button', 'psm-btn psm-btn-dark', isInitial ? '設定して開く' : '認証して開く');
+        m.right.appendChild(cancel); m.right.appendChild(ok);
+
+        function showErr(t) { err.textContent = t; err.style.display = 'block'; }
+        function submit() {
+            if (isInitial) {
+                if (p1.value.length < 8) { showErr('8文字以上で入力してください。'); return; }
+                if (p1.value !== p2.value) { showErr('確認用のパスワードが一致しません。'); return; }
+                passwordHash = p1.value;
+                document.querySelector('input[name="pw"][value="set"]').checked = true;
+            } else {
+                if (Date.now() < lockUntil) {
+                    showErr('入力の失敗が続いたため、あと ' + Math.ceil((lockUntil - Date.now()) / 1000) + ' 秒お待ちください。');
+                    return;
+                }
+                if (p1.value !== passwordHash) {
+                    failCount++;
+                    if (failCount >= 5) { lockUntil = Date.now() + 30000; failCount = 0; showErr('5回続けて失敗しました。30秒お待ちください（実装では数分）。'); }
+                    else showErr('パスワードが違います（残り ' + (5 - failCount) + ' 回）。');
+                    p1.select();
+                    return;
+                }
+                failCount = 0;
+            }
+            authedUntil = Date.now() + 30 * 60 * 1000;
+            m.close();
+            setTimeout(openAdmin, 120);
+        }
+        ok.onclick = submit;
+        m.body.addEventListener('keydown', function (e) { if (e.key === 'Enter') submit(); });
+    }
+
+    // ============================================================
+    // 管理者画面
+    // ============================================================
+    function openAdmin() {
+        var draft = clone(global);
+        draft.forceShortcuts = false;
+        draft.forceDesign = false;
+        var baseRevision = global.revision; // 保存時に revision を指定して競合を検出する
+        var dirty = { sc: false, ds: false, force: false };
+        var activeTab = 'sc';
+
+        var m = openOverlay('wide', 'admin', '管理者設定', '全ユーザーの既定値');
+        var tabs = el('div', 'adm-tabs');
+        m.body.parentNode.insertBefore(tabs, m.body);
+
+        var TAB_DEFS = [['sc', 'ショートカット既定'], ['ds', 'デザイン既定'], ['force', '反映方法'], ['pw', 'パスワード']];
+        function renderTabs() {
+            tabs.innerHTML = '';
+            TAB_DEFS.forEach(function (d) {
+                var b = el('button', 'adm-tab' + (activeTab === d[0] ? ' active' : ''), d[1]);
+                if (dirty[d[0]]) b.appendChild(el('span', 'dot'));
+                b.onclick = function () { activeTab = d[0]; renderTabs(); renderBody(); };
+                tabs.appendChild(b);
+            });
+        }
+
+        var banner = null;
+        function renderBody() {
+            m.body.innerHTML = '';
+            if (banner) m.body.appendChild(banner);
+            var meta = el('div', 'adm-meta');
+            meta.appendChild(el('span', '', '改訂番号: ' + baseRevision));
+            meta.appendChild(el('span', '', '最終更新: ' + global.updatedBy + '　' + global.updatedAt));
+            meta.appendChild(el('span', '', '認証の有効期限: 30分'));
+            m.body.appendChild(meta);
+            if (activeTab === 'sc') renderShortcutTab();
+            else if (activeTab === 'ds') renderDesignTab();
+            else if (activeTab === 'force') renderForceTab();
+            else renderPasswordTab();
+            saveBtn.disabled = !(dirty.sc || dirty.ds || dirty.force);
+            saveBtn.style.display = activeTab === 'pw' ? 'none' : '';
+        }
+
+        function mark(k) { dirty[k] = true; renderTabs(); saveBtn.disabled = false; }
+
+        // --- タブ: ショートカット既定 ---
+        function renderShortcutTab() {
+            m.body.appendChild(el('p', 'psm-intro', '個人設定をしていない利用者のポータルに表示されるショートカットです（' + MIN_SC + '〜' + MAX_SC + '個）。'));
+            var pv = el('div', 'psm-card');
+            pv.appendChild(el('h3', '', '完成イメージ'));
+            var box = el('div', 'psm-preview-box');
+            var t = themeOf(draft.design.scTheme), s = shapeOf(SC_SHAPES, draft.design.scShape);
+            draft.shortcuts.forEach(function (it) {
+                var b = el('div', 'psm-preview-btn', (it.type === 'space' ? '📁 ' : '') + (it.label || '（未設定）'));
+                b.style.background = t.grad; b.style.boxShadow = t.shadow; b.style.borderRadius = s.radius;
+                box.appendChild(b);
+            });
+            pv.appendChild(box);
+            m.body.appendChild(pv);
+
+            draft.shortcuts.forEach(function (it, i) {
+                var row = el('div', 'sc-row');
+                row.appendChild(el('span', 'num', String(i + 1)));
+                var main = el('div', 'main');
+
+                var f1 = el('div', 'psm-field');
+                f1.appendChild(el('label', 'psm-field-label', '登録する遷移先'));
+                var sel = el('select', 'psm-select');
+                var g1 = el('optgroup'); g1.label = 'アプリ';
+                APPS.forEach(function (a) { var o = el('option', '', a.name); o.value = 'app:' + a.id; g1.appendChild(o); });
+                var g2 = el('optgroup'); g2.label = 'スペース';
+                SPACES.forEach(function (sp) { var o = el('option', '', '📁 ' + sp.name); o.value = 'space:' + sp.id; g2.appendChild(o); });
+                sel.appendChild(g1); sel.appendChild(g2);
+                sel.value = it.type + ':' + it.targetId;
+                sel.onchange = function () {
+                    var p = sel.value.split(':');
+                    var list = p[0] === 'app' ? APPS : SPACES, name = '';
+                    list.forEach(function (x) { if (x.id === p[1]) name = x.name; });
+                    it.type = p[0]; it.targetId = p[1]; it.label = name;
+                    mark('sc'); renderBody();
+                };
+                f1.appendChild(sel);
+
+                var f2 = el('div', 'psm-field');
+                f2.appendChild(el('label', 'psm-field-label', 'ボタンに表示する名前'));
+                var inp = el('input', 'psm-input'); inp.value = it.label;
+                inp.oninput = function () { it.label = inp.value; mark('sc'); };
+                inp.onchange = renderBody;
+                f2.appendChild(inp);
+                main.appendChild(f1); main.appendChild(f2);
+                row.appendChild(main);
+
+                var acts = el('div', 'acts');
+                var up = el('button', 'icon-btn', '▲'); up.disabled = i === 0;
+                up.onclick = function () { var x = draft.shortcuts.splice(i, 1)[0]; draft.shortcuts.splice(i - 1, 0, x); mark('sc'); renderBody(); };
+                var dn = el('button', 'icon-btn', '▼'); dn.disabled = i === draft.shortcuts.length - 1;
+                dn.onclick = function () { var x = draft.shortcuts.splice(i, 1)[0]; draft.shortcuts.splice(i + 1, 0, x); mark('sc'); renderBody(); };
+                var del = el('button', 'icon-btn', '✕'); del.disabled = draft.shortcuts.length <= MIN_SC; del.title = '削除';
+                del.onclick = function () { draft.shortcuts.splice(i, 1); mark('sc'); renderBody(); };
+                acts.appendChild(up); acts.appendChild(dn); acts.appendChild(del);
+                row.appendChild(acts);
+                m.body.appendChild(row);
+            });
+
+            var add = el('button', 'psm-btn', '＋ 追加');
+            add.disabled = draft.shortcuts.length >= MAX_SC;
+            add.onclick = function () { draft.shortcuts.push({ type: 'app', targetId: APPS[4].id, label: APPS[4].name }); mark('sc'); renderBody(); };
+            m.body.appendChild(add);
+        }
+
+        // --- タブ: デザイン既定 ---
+        function swatchGroup(current, gradKey, onPick) {
+            var wrap = el('div', 'swatches');
+            THEMES.forEach(function (t) {
+                var b = el('button', 'swatch' + (t.name === current ? ' sel' : ''));
+                var chip = el('span', 'chip'); chip.style.background = t[gradKey];
+                b.appendChild(chip); b.appendChild(el('span', '', t.label));
+                b.onclick = function () { onPick(t.name); };
+                wrap.appendChild(b);
+            });
+            return wrap;
+        }
+        function segGroup(list, current, onPick) {
+            var seg = el('div', 'seg');
+            list.forEach(function (s) {
+                var b = el('button', s.name === current ? 'on' : '', s.label);
+                b.onclick = function () { onPick(s.name); };
+                seg.appendChild(b);
+            });
+            return seg;
+        }
+        function renderDesignTab() {
+            m.body.appendChild(el('p', 'psm-intro', '個人設定をしていない利用者に適用される見た目です。利用者は 🎨🔲🏠 で自分用に変更できます（全員に揃えたい場合は「反映方法」タブへ）。'));
+            var grid = el('div', 'design-grid');
+
+            var c1 = el('div', 'psm-card');
+            c1.appendChild(el('h3', '', 'ショートカットボタン'));
+            c1.appendChild(el('p', 'psm-field-label', '色'));
+            c1.appendChild(swatchGroup(draft.design.scTheme, 'grad', function (n) { draft.design.scTheme = n; mark('ds'); renderBody(); }));
+            var l1 = el('p', 'psm-field-label', '形'); l1.style.marginTop = '12px'; c1.appendChild(l1);
+            c1.appendChild(segGroup(SC_SHAPES, draft.design.scShape, function (n) { draft.design.scShape = n; mark('ds'); renderBody(); }));
+            var l2 = el('p', 'psm-field-label', 'プレビュー'); l2.style.marginTop = '12px'; c1.appendChild(l2);
+            var pv = el('div', 'psm-preview-box');
+            var t = themeOf(draft.design.scTheme), s = shapeOf(SC_SHAPES, draft.design.scShape);
+            draft.shortcuts.slice(0, 3).forEach(function (it) {
+                var b = el('div', 'psm-preview-btn', it.label);
+                b.style.background = t.grad; b.style.boxShadow = t.shadow; b.style.borderRadius = s.radius;
+                pv.appendChild(b);
+            });
+            c1.appendChild(pv);
+
+            var c2 = el('div', 'psm-card');
+            c2.appendChild(el('h3', '', 'ホームボタン（モバイル）'));
+            c2.appendChild(el('p', 'psm-field-label', '色'));
+            c2.appendChild(swatchGroup(draft.design.homeTheme, 'homeGrad', function (n) { draft.design.homeTheme = n; mark('ds'); renderBody(); }));
+            var l3 = el('p', 'psm-field-label', '形'); l3.style.marginTop = '12px'; c2.appendChild(l3);
+            c2.appendChild(segGroup(HOME_SHAPES, draft.design.homeShape, function (n) { draft.design.homeShape = n; mark('ds'); renderBody(); }));
+            var l4 = el('p', 'psm-field-label', 'プレビュー'); l4.style.marginTop = '12px'; c2.appendChild(l4);
+            var phone = el('div', 'mini-phone');
+            var fab = el('div', 'mini-fab'); fab.innerHTML = HOME_SVG;
+            var ht = themeOf(draft.design.homeTheme);
+            fab.style.background = ht.homeGrad; fab.style.boxShadow = ht.shadow; fab.style.borderRadius = shapeOf(HOME_SHAPES, draft.design.homeShape).radius;
+            phone.appendChild(fab); c2.appendChild(phone);
+            var sync = el('button', 'psm-btn', 'ショートカットと同じ色にする');
+            sync.style.marginTop = '10px';
+            sync.onclick = function () { draft.design.homeTheme = draft.design.scTheme; mark('ds'); renderBody(); };
+            c2.appendChild(sync);
+
+            grid.appendChild(c1); grid.appendChild(c2);
+            m.body.appendChild(grid);
+            m.body.appendChild(el('p', 'hint', 'ホームボタンの遷移先（ポータル）と表示する画面は固定のため、ここでは変更できません。'));
+        }
+
+        // --- タブ: 反映方法 ---
+        function renderForceTab() {
+            m.body.appendChild(el('p', 'psm-intro', '通常は、利用者が自分で変えた設定（個人設定）が優先されます。全員に揃えたいときだけチェックしてください。'));
+            var card = el('div', 'psm-card');
+            [['forceShortcuts', 'ショートカットの並びを全員に強制反映', '保存時点より前の個人設定（遷移先・表示名・並び順）を無効にし、全員にこの既定値を表示します。'],
+             ['forceDesign', 'デザイン（色・形・ホームボタンの色）を全員に強制反映', '保存時点より前の 🎨🔲🏠 の個人設定を無効にします。']].forEach(function (d) {
+                var item = el('label', 'force-item');
+                var cb = el('input'); cb.type = 'checkbox'; cb.checked = draft[d[0]];
+                cb.onchange = function () { draft[d[0]] = cb.checked; dirty.force = draft.forceShortcuts || draft.forceDesign; renderTabs(); saveBtn.disabled = !(dirty.sc || dirty.ds || dirty.force); };
+                var tx = el('div'); tx.appendChild(el('div', 't', d[1])); tx.appendChild(el('div', 'd', d[2]));
+                item.appendChild(cb); item.appendChild(tx);
+                card.appendChild(item);
+            });
+            m.body.appendChild(card);
+            m.body.appendChild(el('div', 'warn-box', '⚠️ 強制反映は取り消せません。無効になった個人設定は、利用者が再度設定し直す必要があります。強制反映のあとに利用者が変えた設定は、通常どおり優先されます。'));
+        }
+
+        // --- タブ: パスワード ---
+        function renderPasswordTab() {
+            m.body.appendChild(el('p', 'psm-intro', '管理者全員で共通のパスワードです。管理者から外れた方は、全体設定アプリの権限から外すだけで入れなくなります。'));
+            var card = el('div', 'psm-card');
+            var msg = el('p', ''); card.appendChild(msg);
+            function f(label) {
+                var w = el('div', 'psm-field'); w.appendChild(el('label', 'psm-field-label', label));
+                var i = el('input', 'psm-input'); i.type = 'password'; w.appendChild(i); card.appendChild(w); return i;
+            }
+            var cur = f('現在のパスワード'), n1 = f('新しいパスワード（8文字以上）'), n2 = f('確認のためもう一度');
+            var btn = el('button', 'psm-btn psm-btn-dark', 'パスワードを変更');
+            btn.onclick = function () {
+                if (cur.value !== passwordHash) { msg.className = 'psm-error'; msg.textContent = '現在のパスワードが違います。'; return; }
+                if (n1.value.length < 8) { msg.className = 'psm-error'; msg.textContent = '8文字以上で入力してください。'; return; }
+                if (n1.value !== n2.value) { msg.className = 'psm-error'; msg.textContent = '確認用のパスワードが一致しません。'; return; }
+                passwordHash = n1.value;
+                msg.className = 'psm-ok'; msg.textContent = 'パスワードを変更しました（この保存はパスワードだけで、ほかのタブの変更は含みません）。';
+                cur.value = n1.value = n2.value = '';
+            };
+            card.appendChild(btn);
+            m.body.appendChild(card);
+        }
+
+        // --- フッター ---
+        var lockBtn = el('button', 'psm-btn', '🔒 ロックして閉じる');
+        lockBtn.title = '認証状態を解除して閉じます';
+        lockBtn.onclick = function () { authedUntil = 0; tryClose(); };
+        m.left.appendChild(lockBtn);
+        var cancel = el('button', 'psm-btn', 'キャンセル');
+        cancel.onclick = function () { m.close(); };
+        var saveBtn = el('button', 'psm-btn psm-btn-dark', '保存して全体に反映');
+        m.right.appendChild(cancel); m.right.appendChild(saveBtn);
+
+        function tryClose() {
+            if ((dirty.sc || dirty.ds || dirty.force) && !window.confirm('編集中の内容が保存されていません。破棄してよろしいですか？')) return;
+            m.close();
+        }
+        m.onClose = tryClose;
+
+        saveBtn.onclick = function () { openConfirm(); };
+
+        function openConfirm() {
+            var c = openOverlay('narrow', 'admin', '保存の確認');
+            c.body.appendChild(el('p', 'psm-intro', '次の内容で全体設定を更新します。'));
+            var ul = el('ul', 'confirm-list');
+            if (dirty.sc) ul.appendChild(el('li', '', 'ショートカット既定を変更（' + draft.shortcuts.length + '個）'));
+            if (dirty.ds) ul.appendChild(el('li', '', 'デザイン既定を変更'));
+            ul.appendChild(el('li', '', draft.forceShortcuts ? 'ショートカット: 全員に強制反映する' : 'ショートカット: 個人設定を優先'));
+            ul.appendChild(el('li', '', draft.forceDesign ? 'デザイン: 全員に強制反映する' : 'デザイン: 個人設定を優先'));
+            c.body.appendChild(ul);
+            c.body.appendChild(el('p', 'hint', '他の利用者の画面には、最長10分以内（キャッシュの有効期限）に反映されます。'));
+            var back = el('button', 'psm-btn', '戻る'); back.onclick = c.close;
+            var go = el('button', 'psm-btn psm-btn-dark', '保存する');
+            go.onclick = function () { c.close(); doSave(); };
+            c.right.appendChild(back); c.right.appendChild(go);
+        }
+
+        function doSave() {
+            // 同時編集のシミュレーション: 他の管理者が先に保存して revision が進んでいる
+            if ($('ctl-conflict').checked) {
+                $('ctl-conflict').checked = false;
+                global.revision++;
+                global.updatedBy = '鈴木（管理者）';
+                global.updatedAt = '2026-10-28 17:05';
+                global.design.scTheme = 'purple';
+                renderStage();
+            }
+            if (global.revision !== baseRevision) {
+                banner = el('div', 'adm-banner err');
+                banner.appendChild(el('span', '', '⚠️ 他の管理者（' + global.updatedBy + '）が先に保存したため、保存できませんでした。最新の内容を読み込んでから、もう一度編集してください。'));
+                var reload = el('button', 'psm-btn', '最新を読み込む');
+                reload.onclick = function () {
+                    draft = clone(global); draft.forceShortcuts = false; draft.forceDesign = false;
+                    baseRevision = global.revision; dirty = { sc: false, ds: false, force: false };
+                    banner = null; renderTabs(); renderBody();
+                };
+                banner.appendChild(reload);
+                renderBody();
+                return;
+            }
+            global.revision++;
+            global.shortcuts = clone(draft.shortcuts);
+            global.design = clone(draft.design);
+            if (draft.forceShortcuts) global.shortcutsForceRev = global.revision;
+            if (draft.forceDesign) global.designForceRev = global.revision;
+            global.updatedBy = 'あなた（管理者）';
+            global.updatedAt = '2026-10-28 17:10';
+            baseRevision = global.revision;
+            draft.forceShortcuts = draft.forceDesign = false;
+            dirty = { sc: false, ds: false, force: false };
+            banner = el('div', 'adm-banner ok');
+            banner.appendChild(el('span', '', '✅ 全体設定を保存しました（改訂番号 ' + global.revision + '）。'));
+            renderTabs(); renderBody(); renderStage();
+        }
+
+        renderTabs();
+        renderBody();
+    }
+
+    // ============================================================
+    // 初期化
+    // ============================================================
+    Array.prototype.forEach.call(document.querySelectorAll('input[name="who"], #ctl-personal'), function (i) {
+        i.addEventListener('change', renderStage);
+    });
+    window.addEventListener('pageshow', renderStage);
+    renderStage();
+})();
+</script>
+</body>
+</html>
