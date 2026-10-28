@@ -1341,6 +1341,19 @@
         if (matched) return matched[1];
         return null;
     }
+
+    /**
+     * スペース候補の配列 spaces（{id, name}）に space を追加する純関数。
+     * 同じ id が既にあれば何も変えず false。無ければ追加して名前順（日本語）に並べ替え true。
+     */
+    function addSpaceCandidate(spaces, space) {
+        for (var i = 0; i < spaces.length; i++) {
+            if (String(spaces[i].id) === String(space.id)) return false;
+        }
+        spaces.push(space);
+        spaces.sort(function (a, b) { return String(a.name).localeCompare(String(b.name), 'ja'); });
+        return true;
+    }
     // ============================================================
     // 個人カスタマイズ: 設定モーダルの <style> 注入
     // ============================================================
@@ -2966,9 +2979,12 @@
         var loadedApps = [];
         var loadedSpaces = [];
         var candidatesLoading = true;
+        var spaceAdd = { value: '', msg: '', ok: true, busy: false };
+        var panelClosed = false;
+        var spaceAddInputEl = null; // 「スペース追加」入力欄（再描画後のフォーカス復帰用）
 
         var m = openAdminOverlay('wide', '管理者設定', '全ユーザーの既定値');
-        m.afterClose = function () { isAdminOpen = false; };
+        m.afterClose = function () { panelClosed = true; isAdminOpen = false; };
         var tabs = adminEl('div', 'pna-tabs');
         m.dialog.insertBefore(tabs, m.body);
 
@@ -3172,6 +3188,71 @@
                 renderBody();
             };
             m.body.appendChild(add);
+
+            if (!candidatesLoading) {
+                var spCard = adminEl('div', 'pna-card psm-space-add');
+                spCard.appendChild(adminEl('h3', '', '一覧に無いスペースを追加'));
+                spCard.appendChild(adminEl('p', 'psm-space-add-note', 'アプリが1つも無いスペースは一覧に出ません。スペースのURL または スペースID を貼り付けて追加してください。'));
+                var spRow = adminEl('div', 'psm-space-add-row');
+                var spInput = adminEl('input', 'psm-input');
+                spInput.type = 'text';
+                spInput.placeholder = 'スペースのURL または スペースID';
+                spInput.value = spaceAdd.value;
+                spaceAddInputEl = spInput;
+                // 入力中は値を保持するだけ（再描画・mark しない）
+                spInput.oninput = function () { spaceAdd.value = spInput.value; };
+                spInput.onkeydown = function (ev) {
+                    if (ev.key === 'Enter') { ev.preventDefault(); doAddSpace(); }
+                };
+                var spBtn = adminEl('button', 'psm-btn', spaceAdd.busy ? '確認中...' : '候補に追加');
+                spBtn.disabled = spaceAdd.busy;
+                spBtn.onclick = function () { doAddSpace(); };
+                spRow.appendChild(spInput);
+                spRow.appendChild(spBtn);
+                spCard.appendChild(spRow);
+                var spMsg = adminEl('p', 'psm-space-add-msg', spaceAdd.msg);
+                spMsg.style.color = spaceAdd.ok ? '#2d7a4f' : '#c0392b';
+                spCard.appendChild(spMsg);
+                m.body.appendChild(spCard);
+            }
+        }
+
+        // 「一覧に無いスペースを追加」の処理。追加しただけでは行を自動で選ばない
+        function doAddSpace() {
+            if (spaceAdd.busy) return;
+            var id = extractSpaceIdFromInput(spaceAdd.value);
+            if (id === null) {
+                spaceAdd.ok = false;
+                spaceAdd.msg = 'スペースのURLまたはIDを正しく入力してください。';
+                renderBody();
+                return;
+            }
+            for (var i = 0; i < loadedSpaces.length; i++) {
+                if (String(loadedSpaces[i].id) === id) {
+                    spaceAdd.ok = true;
+                    spaceAdd.msg = 'このスペースは既に一覧にあります。';
+                    renderBody();
+                    return;
+                }
+            }
+            spaceAdd.busy = true;
+            renderBody();
+            fetchSpaceById(id, function (space) {
+                if (panelClosed) return;
+                addSpaceCandidate(loadedSpaces, space);
+                if (spaceListCache) spaceListCache = loadedSpaces;
+                spaceAdd.ok = true;
+                spaceAdd.msg = '『' + space.name + '』を候補に追加しました。';
+                spaceAdd.value = '';
+                spaceAdd.busy = false;
+                if (activeTab === 'sc') { spaceAddInputEl = null; renderBody(); if (spaceAddInputEl) spaceAddInputEl.focus(); }
+            }, function () {
+                if (panelClosed) return;
+                spaceAdd.ok = false;
+                spaceAdd.msg = 'スペースが見つからないか、閲覧権限がありません。';
+                spaceAdd.busy = false;
+                if (activeTab === 'sc') { spaceAddInputEl = null; renderBody(); if (spaceAddInputEl) spaceAddInputEl.focus(); }
+            });
         }
 
         // --- タブ: デザイン既定 ---
@@ -3699,6 +3780,8 @@
         _onGlobalChanged: function () { applyHomeDesignToExisting(); },
         // 純関数・準純関数への読み取り専用の参照（テスト用）。DOM には触れない。本番の動作には影響しない
         __test__: {
+            extractSpaceIdFromInput: extractSpaceIdFromInput,
+            addSpaceCandidate: addSpaceCandidate,
             parseGlobalSettingsJson: parseGlobalSettingsJson,
             buildGlobalSettingsPayload: buildGlobalSettingsPayload,
             parsePersonalPayload: parsePersonalPayload,
