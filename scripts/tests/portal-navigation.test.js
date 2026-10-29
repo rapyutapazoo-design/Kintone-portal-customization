@@ -765,6 +765,30 @@ describe('17c. デザイン設定モーダル（スモーク）', () => {
     });
 });
 
+describe('17d. buildShortcutPreview', () => {
+    function stubDoc(ctx) {
+        ctx.document.createElement = () => ({
+            className: '', textContent: '', style: {}, children: [],
+            appendChild(c) { this.children.push(c); return c; }
+        });
+    }
+    test('先頭1件のラベルだけを1ボタンで表示する', () => {
+        const { ctx, api } = loadModule({ pathname: '/k/' });
+        stubDoc(ctx);
+        const box = api.buildShortcutPreview(['A', 'B', 'C'], api.constants.THEMES[0], api.constants.SHAPES[0]);
+        assert.equal(box.children.length, 1);
+        assert.equal(box.children[0].textContent, 'A');
+        assert.ok(box.children[0].className.indexOf('pna-preview-one') >= 0);
+    });
+    test('ラベルが空なら「ショートカット」を1ボタンで表示する', () => {
+        const { ctx, api } = loadModule({ pathname: '/k/' });
+        stubDoc(ctx);
+        const box = api.buildShortcutPreview([], api.constants.THEMES[0], api.constants.SHAPES[0]);
+        assert.equal(box.children.length, 1);
+        assert.equal(box.children[0].textContent, 'ショートカット');
+    });
+});
+
 describe('18. checkAdminRights', () => {
     function setup(cacheOverrides) {
         const m = loadModule({ src: SRC_GLOBAL });
