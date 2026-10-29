@@ -1,0 +1,1988 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ショートカット＆ホームボタン デザイン候補モックアップ</title>
+<style>
+/* =========================================================
+ * 1. ページ全体（モックアップ外枠・操作パネル）
+ * ========================================================= */
+:root {
+    --page-bg: #eef1f5;
+    --panel-bg: #ffffff;
+    --text: #1a2027;
+    --text-sub: #5b6672;
+    --line: #dde2e8;
+    --accent: #154260;
+
+    /* 形状切替用（JSで切替: capsule=30px / rounded=10px） */
+    --sc-radius: 30px;
+    --home-radius: 50%;
+}
+* { box-sizing: border-box; }
+body {
+    margin: 0;
+    background: var(--page-bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", Meiryo, sans-serif;
+    line-height: 1.6;
+}
+.page { max-width: 1380px; margin: 0 auto; padding: 24px 16px 80px; }
+.page-header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 12px; margin-bottom: 16px; }
+.page h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: .02em; }
+.page .lead { color: var(--text-sub); margin: 0; font-size: 14px; }
+.page h2 { font-size: 18px; margin: 44px 0 12px; padding-left: 10px; border-left: 4px solid var(--accent); }
+
+/* 操作パネル（上部固定） */
+.controls {
+    position: sticky; top: 8px; z-index: 20000;
+    display: flex; flex-wrap: wrap; gap: 12px 22px; align-items: center;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--line); border-radius: 14px;
+    padding: 12px 16px; font-size: 13px;
+    box-shadow: 0 6px 20px rgba(15, 23, 32, 0.07);
+}
+.controls .group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.controls .label { color: var(--text-sub); font-weight: 700; font-size: 12px; }
+.seg { display: inline-flex; background: #eaeef2; border-radius: 9px; padding: 3px; gap: 2px; flex-wrap: wrap; }
+.seg button {
+    border: 0; background: transparent; padding: 5px 11px; border-radius: 7px;
+    font: inherit; font-size: 12px; color: #3d4650; cursor: pointer; white-space: nowrap;
+    transition: background .15s, color .15s;
+}
+.seg button:hover { color: #1a2027; }
+.seg button[aria-pressed="true"] {
+    background: #fff; color: var(--accent); font-weight: 700;
+    box-shadow: 0 1px 3px rgba(0,0,0,.12);
+}
+.controls label.check { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12px; font-weight: 600; color: #3d4650; }
+
+/* =========================================================
+ * 年間シーズナル＆イベント ギャラリー（ワンクリック切替）
+ * ========================================================= */
+.seasonal-gallery-box {
+    background: var(--panel-bg);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 18px 20px;
+    margin-top: 20px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+}
+.seasonal-gallery-head {
+    display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px;
+}
+.seasonal-gallery-title {
+    font-size: 15px; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 8px;
+}
+.seasonal-gallery-sub { font-size: 12px; color: var(--text-sub); margin: 0; }
+.seasonal-gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+    gap: 10px;
+}
+.sg-item {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    padding: 10px 6px 8px; border-radius: 12px; border: 2px solid #edf0f4;
+    background: #f8fafc; cursor: pointer; transition: border-color .15s, background .15s, transform .15s;
+    font: inherit; text-align: center;
+}
+.sg-item:hover { border-color: #cbd5e1; transform: translateY(-2px); }
+.sg-item[aria-pressed="true"] {
+    border-color: var(--accent); background: #eff6ff;
+    box-shadow: 0 3px 10px rgba(21, 66, 96, 0.12);
+}
+.sg-item .sg-fab-wrap {
+    position: relative; width: 48px; height: 48px;
+    display: flex; align-items: center; justify-content: center;
+}
+.sg-item .sg-fab-wrap .btn-home {
+    position: relative; left: auto; bottom: auto; width: 48px; height: 48px; pointer-events: none;
+}
+.sg-item .sg-month { font-size: 10px; font-weight: 700; color: #64748b; line-height: 1.1; }
+.sg-item .sg-name { font-size: 11.5px; font-weight: 700; color: #1e293b; line-height: 1.2; }
+
+/* 候補グリッド */
+.cands-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 24px;
+    margin-top: 24px;
+}
+.page[data-layout="focus"] .cands-grid {
+    grid-template-columns: 1fr;
+}
+@media (max-width: 440px) {
+    .cands-grid { grid-template-columns: 1fr; }
+}
+
+/* 各デザイン候補カード */
+.cand-card {
+    background: var(--panel-bg);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+}
+.cand-card.is-current {
+    border: 2px solid #cbd5e1;
+    background: #f8fafc;
+}
+.cand-head { display: flex; flex-direction: column; gap: 6px; }
+.cand-title-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cand-no {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 28px; height: 28px; padding: 0 8px; border-radius: 999px;
+    background: var(--accent); color: #fff; font-size: 12px; font-weight: 700;
+}
+.cand-card.is-current .cand-no { background: #64748b; }
+.cand-title { font-size: 17px; font-weight: 700; margin: 0; }
+.cand-tag {
+    font-size: 11px; padding: 2px 9px; border-radius: 999px; font-weight: 700;
+}
+.cand-tag.req { background: #dff3e6; color: #186334; }
+.cand-tag.opt { background: #e6effa; color: #19528a; }
+.cand-tag.cur { background: #e2e8f0; color: #475569; }
+.cand-concept { font-size: 13px; color: var(--text-sub); margin: 0; min-height: 40px; }
+
+/* 候補ごとのサブテーマ切替バー */
+.sub-picker {
+    display: flex; flex-direction: column; gap: 6px;
+    background: #f4f6f9; border-radius: 10px; padding: 8px 10px; font-size: 12px;
+}
+.sub-picker-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sub-picker-label { font-weight: 700; color: #4b5563; font-size: 11px; }
+.sub-picker .seg { background: #e2e7ee; width: 100%; }
+.sub-picker .seg button { padding: 4px 8px; font-size: 11px; flex: 1 1 auto; text-align: center; }
+
+/* ホームボタン拡大ショーケース（各カード内） */
+.home-showcase {
+    display: flex; align-items: center; gap: 12px;
+    background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 10px;
+    padding: 9px 12px; font-size: 12px;
+}
+.home-showcase-preview {
+    position: relative; width: 60px; height: 60px; flex: none;
+    display: flex; align-items: center; justify-content: center;
+}
+.home-showcase-preview .btn-home {
+    position: relative; left: auto; bottom: auto; margin: 0;
+}
+.home-showcase-info { flex: 1; min-width: 0; }
+.home-showcase-title { font-weight: 700; color: #1e293b; font-size: 12px; margin-bottom: 2px; display: flex; align-items: center; gap: 6px; }
+.home-showcase-desc { color: #5b6672; font-size: 11.5px; line-height: 1.4; }
+
+/* プレビュー枠コンテナ（スマホ＋PC） */
+.preview-stage {
+    display: flex; flex-direction: column; gap: 16px; align-items: center;
+}
+.page[data-layout="focus"] .preview-stage {
+    flex-direction: row; align-items: flex-start; justify-content: center; flex-wrap: wrap; gap: 24px;
+}
+
+/* デバイス表示切替 */
+.page[data-device="mobile"] .pc-preview { display: none; }
+.page[data-device="pc"] .phone { display: none; }
+
+/* =========================================================
+ * 2. PC版ポータル プレビュー枠
+ * ========================================================= */
+.pc-preview {
+    width: 100%;
+    background: #f5f6f8;
+    border: 1px solid #dce1e7;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.06);
+}
+.page[data-layout="focus"] .pc-preview {
+    flex: 1 1 520px; max-width: 720px;
+}
+.pc-browser-bar {
+    height: 30px; background: #2c3440; color: #cbd5e1;
+    display: flex; align-items: center; padding: 0 12px; gap: 6px; font-size: 11px;
+}
+.pc-dot { width: 9px; height: 9px; border-radius: 50%; background: #475569; }
+.pc-dot.r { background: #f87171; }
+.pc-dot.y { background: #fbbf24; }
+.pc-dot.g { background: #34d399; }
+.pc-browser-title { margin-left: 8px; opacity: 0.85; }
+.pc-portal-header {
+    background: #fff; border-bottom: 1px solid #e3e6ea;
+    padding: 8px 16px; font-size: 12px; font-weight: 700; color: #4b5563;
+    display: flex; align-items: center; justify-content: space-between;
+}
+.pc-portal-body { padding: 14px 16px 18px; }
+.pc-bar-shortcuts {
+    display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+}
+.pc-bar-shortcuts .btn-shortcut {
+    width: auto; min-width: 122px; padding: 10px 18px; min-height: 44px; font-size: 13px;
+}
+.pc-dummy-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px;
+}
+.pc-dummy-card {
+    background: #fff; border: 1px solid #e5e8ec; border-radius: 6px; padding: 10px;
+}
+.pc-dummy-title { font-size: 11px; font-weight: 700; color: #64748b; margin-bottom: 6px; }
+
+/* =========================================================
+ * 3. スマホ枠（kintoneモバイル版ポータル風）
+ * ========================================================= */
+.phone {
+    width: 100%; max-width: 344px; height: 560px; margin: 0 auto;
+    border-radius: 36px; background: #1c1f24; padding: 9px;
+    box-shadow: 0 12px 28px rgba(0,0,0,.16);
+    flex: none;
+}
+.screen {
+    position: relative; height: 100%; border-radius: 27px; overflow: hidden;
+    background: #f3f4f6; display: flex; flex-direction: column;
+}
+.k-header {
+    flex: none; height: 42px; background: #fff; border-bottom: 1px solid #e3e6ea;
+    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px;
+    color: #1f2937; position: relative;
+}
+.k-header-sub {
+    position: absolute; left: 12px; font-size: 11px; color: #6b7280; font-weight: 600;
+}
+.k-scroll { flex: 1; overflow-y: auto; padding: 12px 12px 92px; -webkit-overflow-scrolling: touch; }
+.k-card { background: #fff; border-radius: 10px; padding: 12px; margin-bottom: 11px; border: 1px solid #e6e9ed; }
+.k-card-title { font-size: 12px; font-weight: 700; color: #5b6672; margin-bottom: 8px; }
+.pc-row { display: flex; align-items: center; margin-bottom: 10px; }
+.pc-shortcuts { display: flex; flex-wrap: wrap; gap: 10px; }
+.pc-config { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; align-items: center; }
+.pc-config-hint { font-size: 11px; color: #8b95a1; margin-right: auto; }
+.k-line { height: 8px; border-radius: 4px; background: #e9ecef; margin: 6px 0; }
+
+/* トースト通知 */
+.toast {
+    position: absolute; left: 50%; bottom: 82px; transform: translate(-50%, 8px);
+    background: rgba(26,32,39,.9); color: #fff; font-size: 12px; padding: 7px 14px;
+    border-radius: 999px; white-space: nowrap; opacity: 0; pointer-events: none;
+    transition: opacity .2s, transform .2s; z-index: 10000;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* =========================================================
+ * 4. ボタン共通ベース（現行仕様互換の土台）
+ * ========================================================= */
+.btn-shortcut {
+    position: relative;
+    box-sizing: border-box;
+    display: flex; justify-content: center; align-items: center; gap: 7px;
+    width: calc(50% - 5px); min-height: 48px; padding: 10px 8px;
+    color: #fff; border: none; text-decoration: none; font-weight: 700; font-size: 13px;
+    letter-spacing: .03em; text-align: center; line-height: 1.3;
+    border-radius: var(--sc-radius);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    overflow: hidden;
+    isolation: isolate;
+    transition: transform .18s ease, filter .18s ease, box-shadow .18s ease, background .2s ease;
+}
+.btn-shortcut .sc-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    flex: none; font-size: 15px; line-height: 1; position: relative; z-index: 2;
+}
+/* アイコン非表示モード（ただし候補3「親しみやすい」はアイコン常時表示） */
+.page[data-icons="off"] .btn-shortcut .sc-icon { display: none; }
+.page[data-icons="off"] .style-friendly .btn-shortcut .sc-icon { display: inline-flex; }
+
+.btn-shortcut .sc-label { position: relative; z-index: 2; }
+.btn-shortcut .sc-deco {
+    position: absolute; pointer-events: none; z-index: 1;
+}
+
+.btn-inquiry {
+    margin-left: auto; box-sizing: border-box; display: inline-flex; justify-content: center; align-items: center;
+    white-space: nowrap; padding: 8px 13px; border-radius: 20px;
+    background: linear-gradient(135deg, #d9534f 0%, #a92d2a 100%);
+    color: #fff; border: none; font-weight: bold; font-size: 11.5px; letter-spacing: .3px;
+    text-decoration: none; text-shadow: 0 1px 2px rgba(0,0,0,.2);
+    box-shadow: 0 3px 8px rgba(169, 45, 42, .32);
+    cursor: pointer;
+}
+.btn-config {
+    background: #fff; border: 1px solid #ddd; border-radius: 50%;
+    font-size: 14px; width: 32px; height: 32px; padding: 0;
+    display: flex; justify-content: center; align-items: center;
+    box-shadow: 0 2px 5px rgba(0,0,0,.08); cursor: pointer;
+}
+.btn-config:hover { background: #f3f5f8; }
+
+.btn-home {
+    position: absolute; bottom: 16px; left: calc(50% - 28px);
+    width: 56px; height: 56px;
+    border-radius: var(--home-radius);
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    z-index: 9999; cursor: pointer; text-decoration: none; color: #fff;
+    -webkit-tap-highlight-color: transparent; user-select: none;
+    overflow: hidden; isolation: isolate;
+    transition: transform .18s ease, filter .18s ease, box-shadow .18s ease, background .2s ease;
+}
+.btn-home .home-icon-wrap {
+    position: relative; z-index: 2; display: flex; align-items: center; justify-content: center;
+    line-height: 0;
+}
+.btn-home svg { position: relative; z-index: 2; flex: none; }
+
+/* タップ波紋（現行 portal-navigation.js 互換） */
+.tap-target::before {
+    content: ""; position: absolute; z-index: 1; pointer-events: none;
+    left: var(--rx, 50%); top: var(--ry, 50%);
+    width: var(--rd, 200px); height: var(--rd, 200px);
+    margin: calc(var(--rd, 200px) / -2) 0 0 calc(var(--rd, 200px) / -2);
+    border-radius: 50%;
+    background: rgba(255, 255, 255, .32);
+    transform: scale(0); opacity: 0;
+    transition: transform 420ms cubic-bezier(.2, .8, .3, 1), opacity 320ms ease;
+}
+.tap-target.is-pressed::before { transform: scale(1); opacity: 1; transition: transform 420ms cubic-bezier(.2, .8, .3, 1), opacity 50ms; }
+.tap-target.is-navigating::after {
+    content: ""; position: absolute; z-index: 3; pointer-events: none;
+    left: 0; bottom: 0; height: 3px; width: 40%;
+    background: rgba(255, 255, 255, .92); border-radius: 3px;
+    animation: nav-bar 0.9s ease-in-out infinite;
+}
+.btn-home.tap-target.is-navigating::after {
+    left: 28%; bottom: 8px; width: 44%; animation: nav-bar-home 0.9s ease-in-out infinite;
+}
+@keyframes nav-bar { from { transform: translateX(-100%); } to { transform: translateX(260%); } }
+@keyframes nav-bar-home { 0%, 100% { transform: scaleX(.3); } 50% { transform: scaleX(1); } }
+
+/* =========================================================
+ * 【基準】現行デザイン（グラデーション・ベーシック）
+ * ========================================================= */
+.style-current {
+    --cur-grad: linear-gradient(135deg, #154260 0%, #2b7bc0 100%);
+    --cur-home-grad: linear-gradient(135deg, #2b7bc0 0%, #154260 100%);
+    --cur-shadow: 0 4px 10px rgba(21, 66, 96, 0.4);
+}
+.style-current[data-sub="green"] {
+    --cur-grad: linear-gradient(135deg, #134E5E 0%, #71B280 100%);
+    --cur-home-grad: linear-gradient(135deg, #71B280 0%, #134E5E 100%);
+    --cur-shadow: 0 4px 10px rgba(19, 78, 94, 0.4);
+}
+.style-current[data-sub="purple"] {
+    --cur-grad: linear-gradient(135deg, #4b134f 0%, #c94b4b 100%);
+    --cur-home-grad: linear-gradient(135deg, #c94b4b 0%, #4b134f 100%);
+    --cur-shadow: 0 4px 10px rgba(75, 19, 79, 0.4);
+}
+.style-current[data-sub="standard"] {
+    --cur-grad: #3498db;
+    --cur-home-grad: #3498db;
+    --cur-shadow: 0 4px 10px rgba(52, 152, 219, 0.4);
+}
+.style-current .btn-shortcut {
+    background: var(--cur-grad);
+    box-shadow: var(--cur-shadow);
+    text-shadow: 0 1px 2px rgba(0,0,0,.2);
+}
+.style-current .btn-home {
+    background: var(--cur-home-grad);
+    box-shadow: var(--cur-shadow);
+}
+
+/* =========================================================
+ * 【候補1】季節・イベント（シーズナル・モチーフ 全13種！）
+ *   正月・冬・ひな祭り・春（桜）・七夕・夏・花火大会・お盆・秋（紅葉）・ハロウィン・Xmas（ツリー / ソリ / プレゼント）
+ * ========================================================= */
+.style-seasonal {
+    --sea-grad: linear-gradient(135deg, #3b0764 0%, #7c2d12 48%, #ea580c 100%);
+    --sea-home-grad: linear-gradient(145deg, #fb923c 0%, #ea580c 52%, #581c87 100%);
+    --sea-shadow: 0 5px 15px rgba(88, 28, 135, 0.42);
+    --sea-border: rgba(253, 186, 116, 0.55);
+}
+/* 🎍 正月（紅白・金） */
+.style-seasonal[data-sub="newyear"] {
+    --sea-grad: linear-gradient(135deg, #881337 0%, #be123c 55%, #d97706 100%);
+    --sea-home-grad: linear-gradient(145deg, #e11d48 0%, #9f1239 60%, #b45309 100%);
+    --sea-shadow: 0 5px 15px rgba(159, 18, 57, 0.4);
+    --sea-border: rgba(253, 230, 138, 0.7);
+}
+/* 🎎 ひな祭り（桃の節句・菱餅三色：桃・白・若草） */
+.style-seasonal[data-sub="hinamatsuri"] {
+    --sea-grad: linear-gradient(135deg, #db2777 0%, #f472b6 58%, #34d399 100%);
+    --sea-home-grad: linear-gradient(145deg, #f472b6 0%, #db2777 65%, #10b981 100%);
+    --sea-shadow: 0 5px 14px rgba(219, 39, 119, 0.34);
+    --sea-border: rgba(254, 240, 138, 0.65);
+}
+/* 🌸 春（桜ブロッサム：優美な花びら＆春霞グラデーション） */
+.style-seasonal[data-sub="spring"] {
+    --sea-grad: linear-gradient(135deg, #be185d 0%, #db2777 48%, #f472b6 100%);
+    --sea-home-grad: linear-gradient(145deg, #f472b6 0%, #db2777 55%, #9d174d 100%);
+    --sea-shadow: 0 5px 15px rgba(190, 24, 93, 0.36);
+    --sea-border: rgba(253, 242, 248, 0.72);
+}
+/* 🎋 七夕（天の川・星夜と笹竹） */
+.style-seasonal[data-sub="tanabata"] {
+    --sea-grad: linear-gradient(135deg, #0f172a 0%, #1d4ed8 52%, #0d9488 100%);
+    --sea-home-grad: linear-gradient(145deg, #2563eb 0%, #1e1b4b 60%, #0d9488 100%);
+    --sea-shadow: 0 5px 15px rgba(29, 78, 216, 0.4);
+    --sea-border: rgba(253, 224, 71, 0.55);
+}
+/* 🌻 夏（新緑＆オーシャンブリーズ） */
+.style-seasonal[data-sub="summer"] {
+    --sea-grad: linear-gradient(135deg, #0369a1 0%, #0ea5e9 55%, #2dd4bf 100%);
+    --sea-home-grad: linear-gradient(135deg, #2dd4bf 0%, #0284c7 60%, #0369a1 100%);
+    --sea-shadow: 0 5px 14px rgba(3, 105, 161, 0.34);
+    --sea-border: rgba(224, 242, 254, 0.55);
+}
+/* 🎆 夏祭り・花火大会（夜空に咲く大輪の花火） */
+.style-seasonal[data-sub="fireworks"] {
+    --sea-grad: linear-gradient(135deg, #172554 0%, #6d28d9 48%, #e11d48 82%, #f59e0b 100%);
+    --sea-home-grad: linear-gradient(145deg, #1e1b4b 0%, #7e22ce 50%, #e11d48 100%);
+    --sea-shadow: 0 5px 15px rgba(109, 40, 217, 0.42);
+    --sea-border: rgba(253, 224, 71, 0.6);
+}
+/* 🏮 お盆（盆提灯の静謐な灯り） */
+.style-seasonal[data-sub="obon"] {
+    --sea-grad: linear-gradient(135deg, #311042 0%, #581c87 50%, #d97706 100%);
+    --sea-home-grad: linear-gradient(145deg, #b45309 0%, #6b21a8 55%, #2e1065 100%);
+    --sea-shadow: 0 5px 15px rgba(88, 28, 135, 0.38);
+    --sea-border: rgba(253, 230, 138, 0.55);
+}
+/* 🍁 秋（紅葉オータム） */
+.style-seasonal[data-sub="autumn"] {
+    --sea-grad: linear-gradient(135deg, #7c2d12 0%, #c2410c 52%, #ea580c 100%);
+    --sea-home-grad: linear-gradient(135deg, #f59e0b 0%, #ea580c 50%, #7c2d12 100%);
+    --sea-shadow: 0 5px 14px rgba(124, 45, 18, 0.38);
+    --sea-border: rgba(255, 237, 213, 0.5);
+}
+/* 🎃 ハロウィン（カボチャ：ジャック・オー・ランタン） */
+.style-seasonal[data-sub="halloween"] {
+    --sea-grad: linear-gradient(135deg, #3b0764 0%, #7c2d12 48%, #ea580c 100%);
+    --sea-home-grad: linear-gradient(145deg, #fb923c 0%, #ea580c 52%, #581c87 100%);
+    --sea-shadow: 0 5px 15px rgba(88, 28, 135, 0.42);
+    --sea-border: rgba(253, 186, 116, 0.55);
+}
+/* 🎄 クリスマス①：もみの木（既定：赤と緑のグラデーション） */
+.style-seasonal[data-sub="christmas"] {
+    --sea-grad: linear-gradient(135deg, #b91c1c 0%, #dc2626 42%, #15803d 100%);
+    --sea-home-grad: linear-gradient(145deg, #dc2626 0%, #b91c1c 45%, #15803d 100%);
+    --sea-shadow: 0 5px 15px rgba(20, 83, 45, 0.42);
+    --sea-border: rgba(253, 224, 71, 0.68);
+}
+/* 🛷 クリスマス②：サンタのソリ（既定：赤と白のグラデーション） */
+.style-seasonal[data-sub="christmas_sleigh"] {
+    --sea-grad: linear-gradient(135deg, #b91c1c 0%, #ef4444 50%, #f8fafc 100%);
+    --sea-home-grad: linear-gradient(145deg, #b91c1c 0%, #ef4444 52%, #f8fafc 100%);
+    --sea-shadow: 0 5px 15px rgba(185, 28, 28, 0.38);
+    --sea-border: rgba(255, 255, 255, 0.85);
+}
+/* 🎁 クリスマス③：プレゼント（既定：赤と緑と黄色のグラデーション） */
+.style-seasonal[data-sub="christmas_present"] {
+    --sea-grad: linear-gradient(135deg, #dc2626 0%, #15803d 50%, #eab308 100%);
+    --sea-home-grad: linear-gradient(145deg, #dc2626 0%, #15803d 50%, #eab308 100%);
+    --sea-shadow: 0 5px 15px rgba(21, 128, 61, 0.42);
+    --sea-border: rgba(254, 240, 138, 0.82);
+}
+
+/* 🎅 クリスマス3案（ツリー・ソリ・贈り物）共通のグラデーション3種切替オーバーライド */
+.style-seasonal[data-sub^="christmas"][data-xmas-grad="red_green"] {
+    --sea-grad: linear-gradient(135deg, #b91c1c 0%, #dc2626 42%, #15803d 100%);
+    --sea-home-grad: linear-gradient(145deg, #dc2626 0%, #b91c1c 45%, #15803d 100%);
+    --sea-shadow: 0 5px 15px rgba(20, 83, 45, 0.42);
+    --sea-border: rgba(253, 224, 71, 0.68);
+}
+.style-seasonal[data-sub^="christmas"][data-xmas-grad="red_white"] {
+    --sea-grad: linear-gradient(135deg, #b91c1c 0%, #ef4444 50%, #f8fafc 100%);
+    --sea-home-grad: linear-gradient(145deg, #b91c1c 0%, #ef4444 52%, #f8fafc 100%);
+    --sea-shadow: 0 5px 15px rgba(185, 28, 28, 0.38);
+    --sea-border: rgba(255, 255, 255, 0.85);
+}
+.style-seasonal[data-sub^="christmas"][data-xmas-grad="red_green_yellow"] {
+    --sea-grad: linear-gradient(135deg, #dc2626 0%, #15803d 50%, #eab308 100%);
+    --sea-home-grad: linear-gradient(145deg, #dc2626 0%, #15803d 50%, #eab308 100%);
+    --sea-shadow: 0 5px 15px rgba(21, 128, 61, 0.42);
+    --sea-border: rgba(254, 240, 138, 0.82);
+}
+/* 赤と白グラデーション時の白文字・白アイコンの視認性向上シャドウ */
+.style-seasonal[data-sub="christmas_sleigh"]:not([data-xmas-grad]) .btn-shortcut,
+.style-seasonal[data-sub^="christmas"][data-xmas-grad="red_white"] .btn-shortcut {
+    text-shadow: 0 1px 3px rgba(127, 29, 29, 0.72), 0 0 8px rgba(153, 27, 27, 0.35);
+}
+.style-seasonal[data-sub="christmas_sleigh"]:not([data-xmas-grad]) .btn-home svg,
+.style-seasonal[data-sub^="christmas"][data-xmas-grad="red_white"] .btn-home svg,
+.style-seasonal[data-sub="christmas_sleigh"]:not([data-xmas-grad]) .btn-shortcut .sc-deco svg,
+.style-seasonal[data-sub^="christmas"][data-xmas-grad="red_white"] .btn-shortcut .sc-deco svg {
+    filter: drop-shadow(0 1px 2px rgba(127, 29, 29, 0.55));
+}
+
+/* ❄️ 冬（雪結晶＆ホリデーイルミネーション） */
+.style-seasonal[data-sub="winter"] {
+    --sea-grad: linear-gradient(135deg, #1e3a8a 0%, #2563eb 55%, #60a5fa 100%);
+    --sea-home-grad: linear-gradient(135deg, #60a5fa 0%, #2563eb 55%, #1e3a8a 100%);
+    --sea-shadow: 0 5px 14px rgba(30, 58, 138, 0.38);
+    --sea-border: rgba(219, 234, 254, 0.58);
+}
+
+.style-seasonal .btn-shortcut {
+    background: var(--sea-grad);
+    box-shadow: var(--sea-shadow), inset 0 1px 0 var(--sea-border);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
+}
+.style-seasonal .btn-shortcut .sc-deco {
+    right: -3px; bottom: -5px; width: 44px; height: 44px; opacity: 0.28;
+    transform: rotate(-8deg);
+}
+.style-seasonal .btn-home {
+    background: var(--sea-home-grad);
+    box-shadow: var(--sea-shadow), inset 0 1.5px 1px var(--sea-border);
+    border: 1.5px solid rgba(255, 255, 255, 0.32);
+}
+
+/* =========================================================
+ * 【候補2】モダン（フロスト＆クリーン：最新Web/SaaSデザイン調）
+ *   洗練されたインナーハイライト・デュオトーン線画ホームアイコン
+ * ========================================================= */
+.style-modern {
+    --mod-bg: linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #334155 100%);
+    --mod-text: #f8fafc;
+    --mod-sub: rgba(248, 250, 252, 0.55);
+    --mod-border: rgba(255, 255, 255, 0.14);
+    --mod-shadow: 0 6px 16px -2px rgba(15, 23, 42, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+    --mod-accent: #38bdf8;
+    --mod-home-bg: linear-gradient(145deg, #0f172a 0%, #1e293b 100%);
+    --mod-home-color: #f8fafc;
+    --mod-home-border: rgba(56, 189, 248, 0.38);
+    --mod-home-shadow: 0 10px 24px -4px rgba(15, 23, 42, 0.45), 0 0 0 1px rgba(255,255,255,0.12), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+/* サブ2: クリーンホワイト（白基調・最新SaaSのフローティンググラスボタン） */
+.style-modern[data-sub="clean"] {
+    --mod-bg: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    --mod-text: #0f172a;
+    --mod-sub: #64748b;
+    --mod-border: #cbd5e1;
+    --mod-shadow: 0 2px 6px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04), inset 0 1px 0 #ffffff;
+    --mod-accent: #2563eb;
+    --mod-home-bg: rgba(255, 255, 255, 0.92);
+    --mod-home-color: #1e293b;
+    --mod-home-border: #cbd5e1;
+    --mod-home-shadow: 0 10px 25px -4px rgba(15, 23, 42, 0.16), 0 2px 6px rgba(15, 23, 42, 0.08), inset 0 1px 0 #ffffff;
+}
+/* サブ3: オーロラ・インディゴ */
+.style-modern[data-sub="indigo"] {
+    --mod-bg: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4338ca 100%);
+    --mod-text: #ffffff;
+    --mod-sub: rgba(255, 255, 255, 0.6);
+    --mod-border: rgba(165, 180, 252, 0.28);
+    --mod-shadow: 0 6px 16px -2px rgba(49, 46, 129, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+    --mod-accent: #a5b4fc;
+    --mod-home-bg: linear-gradient(135deg, #4338ca 0%, #1e1b4b 100%);
+    --mod-home-color: #ffffff;
+    --mod-home-border: rgba(165, 180, 252, 0.42);
+    --mod-home-shadow: 0 10px 24px -4px rgba(49, 46, 129, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+/* サブ4: サイバーエメラルド（ミント＆ダークガラス） */
+.style-modern[data-sub="mint"] {
+    --mod-bg: linear-gradient(135deg, #064e3b 0%, #0f766e 60%, #115e59 100%);
+    --mod-text: #f0fdf4;
+    --mod-sub: rgba(240, 253, 244, 0.6);
+    --mod-border: rgba(110, 231, 183, 0.28);
+    --mod-shadow: 0 6px 16px -2px rgba(6, 78, 59, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+    --mod-accent: #6ee7b7;
+    --mod-home-bg: linear-gradient(135deg, #0f766e 0%, #064e3b 100%);
+    --mod-home-color: #ffffff;
+    --mod-home-border: rgba(110, 231, 183, 0.42);
+    --mod-home-shadow: 0 10px 24px -4px rgba(6, 78, 59, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.32);
+}
+.style-modern .btn-shortcut {
+    background: var(--mod-bg);
+    color: var(--mod-text);
+    border: 1px solid var(--mod-border);
+    box-shadow: var(--mod-shadow);
+    text-shadow: none;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    justify-content: space-between;
+    padding: 10px 13px;
+}
+.style-modern .btn-shortcut::after {
+    content: "↗";
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--mod-accent);
+    line-height: 1;
+    margin-left: 4px;
+    position: relative;
+    z-index: 2;
+    opacity: 0.9;
+}
+.style-modern[data-sub="clean"] .btn-shortcut .sc-label::before {
+    content: "";
+    display: inline-block;
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--mod-accent);
+    margin-right: 7px;
+    vertical-align: middle;
+}
+.style-modern[data-sub="clean"] .tap-target::before {
+    background: rgba(37, 99, 235, 0.14);
+}
+.style-modern[data-sub="clean"] .btn-home.tap-target.is-navigating::after {
+    background: #2563eb;
+}
+.style-modern .btn-home {
+    background: var(--mod-home-bg);
+    color: var(--mod-home-color);
+    border: 1.5px solid var(--mod-home-border);
+    box-shadow: var(--mod-home-shadow);
+    backdrop-filter: blur(10px);
+}
+.style-modern .btn-home::before {
+    z-index: 1;
+}
+
+/* =========================================================
+ * 【候補3】老若男女に親しみやすい（ユニバーサル・ソフト）
+ *   丸アイコンバッジ＋温かみのある丸屋根のお家アイコン（単一アイコン）
+ * ========================================================= */
+.style-friendly {
+    --fri-grad: linear-gradient(180deg, #2589d0 0%, #1b6ca8 100%);
+    --fri-border: #8ecae6;
+    --fri-shadow: 0 4px 10px rgba(27, 108, 168, 0.28);
+    --fri-icon-color: #1b6ca8;
+}
+.style-friendly[data-sub="warm"] {
+    --fri-grad: linear-gradient(180deg, #f27059 0%, #d94e34 100%);
+    --fri-border: #fbc4ab;
+    --fri-shadow: 0 4px 10px rgba(217, 78, 52, 0.28);
+    --fri-icon-color: #d94e34;
+}
+.style-friendly[data-sub="leaf"] {
+    --fri-grad: linear-gradient(180deg, #3b9ae1 0%, #2a9d8f 100%);
+    --fri-border: #a8dadc;
+    --fri-shadow: 0 4px 10px rgba(42, 157, 143, 0.28);
+    --fri-icon-color: #21867a;
+}
+.style-friendly[data-sub="berry"] {
+    --fri-grad: linear-gradient(180deg, #ec4899 0%, #be185d 100%);
+    --fri-border: #fbcfe8;
+    --fri-shadow: 0 4px 10px rgba(190, 24, 93, 0.28);
+    --fri-icon-color: #be185d;
+}
+.style-friendly .btn-shortcut {
+    background: var(--fri-grad);
+    box-shadow: var(--fri-shadow), inset 0 0 0 2px rgba(255, 255, 255, 0.38);
+    justify-content: flex-start;
+    padding: 8px 10px 8px 8px;
+    font-size: 13.5px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.18);
+}
+.style-friendly .btn-shortcut .sc-icon {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: #ffffff;
+    color: var(--fri-icon-color);
+    font-size: 15px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
+}
+.style-friendly .btn-shortcut .sc-label {
+    flex: 1; text-align: center; padding-right: 4px;
+}
+.style-friendly .btn-home {
+    width: 58px; height: 58px; left: calc(50% - 29px); bottom: 15px;
+    background: var(--fri-grad);
+    box-shadow: var(--fri-shadow), 0 0 0 3px #ffffff, 0 4px 14px rgba(0,0,0,0.22);
+}
+.style-friendly .home-showcase-preview .btn-home {
+    left: auto; bottom: auto;
+}
+
+/* =========================================================
+ * 【候補4】立体・物理ボタン風（タクタイル・3Dスイッチ）
+ *   下にしっかりした厚み（リム）＋物理キーキャップ調ホームアイコン
+ * ========================================================= */
+.style-tactile {
+    --tac-grad: linear-gradient(180deg, #2b7bc0 0%, #1a5a96 100%);
+    --tac-lip: #0f3558;
+    --tac-shadow: rgba(15, 53, 88, 0.35);
+    --tac-led: #7dd3fc;
+}
+.style-tactile[data-sub="emerald"] {
+    --tac-grad: linear-gradient(180deg, #2a9d8f 0%, #1d7268 100%);
+    --tac-lip: #10453f;
+    --tac-shadow: rgba(16, 69, 63, 0.35);
+    --tac-led: #6ee7b7;
+}
+.style-tactile[data-sub="amber"] {
+    --tac-grad: linear-gradient(180deg, #e07a2e 0%, #c05611 100%);
+    --tac-lip: #7c3407;
+    --tac-shadow: rgba(124, 52, 7, 0.35);
+    --tac-led: #fde047;
+}
+.style-tactile[data-sub="graphite"] {
+    --tac-grad: linear-gradient(180deg, #475569 0%, #1e293b 100%);
+    --tac-lip: #0f172a;
+    --tac-shadow: rgba(15, 23, 42, 0.42);
+    --tac-led: #38bdf8;
+}
+.style-tactile .btn-shortcut {
+    background: var(--tac-grad);
+    border-top: 1px solid rgba(255, 255, 255, 0.45);
+    box-shadow: 0 5px 0 var(--tac-lip), 0 7px 12px var(--tac-shadow);
+    transform: translateY(-2px);
+    transition: transform 80ms ease, box-shadow 80ms ease, filter 150ms ease;
+}
+.style-tactile .btn-shortcut.is-pressed,
+.style-tactile .btn-shortcut.is-navigating {
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 var(--tac-lip), 0 2px 4px var(--tac-shadow);
+}
+.style-tactile .btn-home {
+    background: var(--tac-grad);
+    border-top: 1.5px solid rgba(255, 255, 255, 0.55);
+    box-shadow: 0 5px 0 var(--tac-lip), 0 8px 16px var(--tac-shadow), inset 0 -2px 4px rgba(0,0,0,0.18);
+    transform: translateY(-2px);
+    transition: transform 80ms ease, box-shadow 80ms ease;
+}
+.style-tactile .btn-home.is-pressed,
+.style-tactile .btn-home.is-navigating {
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 var(--tac-lip), 0 2px 5px var(--tac-shadow);
+}
+
+/* =========================================================
+ * 【候補5】和モダン・ナチュラル（日本の伝統色＆家紋・庵アイコン）
+ * ========================================================= */
+.style-wamoden {
+    /* 藍鉄（あいてつ） */
+    --wa-bg: linear-gradient(135deg, #1f3134 0%, #2c4f54 100%);
+    --wa-ring: rgba(234, 215, 177, 0.6);
+    --wa-accent: #e2c684;
+    --wa-shadow: 0 4px 11px rgba(31, 49, 52, 0.34);
+}
+.style-wamoden[data-sub="matcha"] {
+    /* 千歳緑〜抹茶 */
+    --wa-bg: linear-gradient(135deg, #2d4b37 0%, #4a6b53 100%);
+    --wa-ring: rgba(238, 229, 203, 0.6);
+    --wa-accent: #e8d396;
+    --wa-shadow: 0 4px 11px rgba(45, 75, 55, 0.34);
+}
+.style-wamoden[data-sub="akane"] {
+    /* 茜〜弁柄（べんがら） */
+    --wa-bg: linear-gradient(135deg, #6b2c25 0%, #8f4036 100%);
+    --wa-ring: rgba(242, 222, 196, 0.6);
+    --wa-accent: #edd0a1;
+    --wa-shadow: 0 4px 11px rgba(107, 44, 37, 0.34);
+}
+.style-wamoden[data-sub="kurumi"] {
+    /* 胡桃染（くるみぞめ・木目調ナチュラル） */
+    --wa-bg: linear-gradient(135deg, #5c4332 0%, #7d5d46 100%);
+    --wa-ring: rgba(245, 234, 216, 0.62);
+    --wa-accent: #f3dfc1;
+    --wa-shadow: 0 4px 11px rgba(92, 67, 50, 0.34);
+}
+.style-wamoden[data-sub="fujimurasaki"] {
+    /* 藤紫〜江戸紫 */
+    --wa-bg: linear-gradient(135deg, #3b2854 0%, #5b3e7a 100%);
+    --wa-ring: rgba(238, 224, 245, 0.6);
+    --wa-accent: #ebd2f5;
+    --wa-shadow: 0 4px 11px rgba(59, 40, 84, 0.36);
+}
+.style-wamoden .btn-shortcut {
+    background:
+        repeating-linear-gradient(45deg, rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 2px, transparent 2px, transparent 6px),
+        var(--wa-bg);
+    box-shadow: var(--wa-shadow), inset 0 0 0 1.5px var(--wa-ring);
+    border: 2px solid transparent;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+}
+.style-wamoden .btn-shortcut::after {
+    content: "◆";
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 7px;
+    color: var(--wa-accent);
+    opacity: 0.85;
+}
+.style-wamoden .btn-home {
+    background:
+        repeating-linear-gradient(45deg, rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 2px, transparent 2px, transparent 6px),
+        var(--wa-bg);
+    box-shadow: var(--wa-shadow), inset 0 0 0 2px var(--wa-ring);
+    border: 2px solid transparent;
+}
+
+/* =========================================================
+ * 5. 各カード下部の特徴・メリット/注意点リスト
+ * ========================================================= */
+.cand-points {
+    font-size: 12px; margin: 4px 0 0; padding-top: 10px; border-top: 1px solid #eef1f5;
+    display: grid; grid-template-columns: auto 1fr; gap: 4px 10px;
+}
+.cand-points dt { font-weight: 700; white-space: nowrap; }
+.cand-points dt.good { color: #186334; }
+.cand-points dt.note { color: #9a5b13; }
+.cand-points dd { margin: 0; color: #3d4650; }
+
+/* =========================================================
+ * 6. 比較表＆🎨デザイン設定モーダル組み込みイメージ
+ * ========================================================= */
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-bg); }
+.spec { width: 100%; min-width: 820px; border-collapse: collapse; font-size: 13px; }
+.spec th, .spec td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.spec thead th { background: #f6f8fa; white-space: nowrap; font-weight: 700; }
+.spec tbody th { background: #fafbfc; white-space: nowrap; font-weight: 700; }
+
+/* 🎨 デザイン設定モーダルの拡張イメージ */
+.modal-sim {
+    background: var(--panel-bg); border: 1px solid var(--line); border-radius: 14px;
+    max-width: 720px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+}
+.modal-sim-header {
+    padding: 14px 20px; background: linear-gradient(135deg, #154260 0%, #2b7bc0 100%);
+    color: #fff; font-weight: 700; font-size: 15px; display: flex; justify-content: space-between; align-items: center;
+}
+.modal-sim-body { padding: 16px 20px; background: #f6f8fa; }
+.style-cards-sim {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(195px, 1fr)); gap: 10px; margin-top: 8px;
+}
+.style-card-btn {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+    padding: 10px 12px; border-radius: 10px; border: 2px solid #dde2e8; background: #fff;
+    cursor: pointer; text-align: left; font: inherit; transition: border-color .15s, box-shadow .15s;
+}
+.style-card-btn:hover { border-color: #94a3b8; }
+.style-card-btn[aria-pressed="true"] {
+    border-color: #154260; background: #f0f6fc; box-shadow: 0 2px 6px rgba(21,66,96,0.12);
+}
+.style-card-btn .scb-title { font-size: 12.5px; font-weight: 700; color: #1a2027; display: flex; align-items: center; gap: 5px; }
+.style-card-btn .scb-desc { font-size: 11px; color: #64748b; line-height: 1.35; }
+</style>
+</head>
+<body>
+<div class="page" id="page" data-layout="grid" data-device="mobile" data-icons="off">
+    <div class="page-header">
+        <div>
+            <h1>Kintone ショートカット＆ホームボタン デザイン候補モックアップ</h1>
+            <p class="lead">現行デザインと追加候補5案。<strong>クリスマスの3種グラデーション（赤と緑・赤と白・赤と緑と黄色）＆頂上に星を置いたツリーデザイン</strong>、以前のデザインに戻した<strong>七夕・夏</strong>など、全13種の季節・イベント連動を実際に触って比較できます。</p>
+        </div>
+    </div>
+
+    <!-- 上部操作パネル -->
+    <div class="controls" aria-label="表示切り替えパネル">
+        <div class="group">
+            <span class="label">表示レイアウト</span>
+            <div class="seg" id="ctl-layout">
+                <button type="button" data-val="grid" aria-pressed="true">すべて並べて比較</button>
+                <button type="button" data-val="focus" aria-pressed="false">1案ずつ大きく表示（スマホ＋PC並列）</button>
+            </div>
+        </div>
+        <div class="group" id="ctl-device-group">
+            <span class="label">プレビュー端末</span>
+            <div class="seg" id="ctl-device">
+                <button type="button" data-val="mobile" aria-pressed="true">📱 モバイル</button>
+                <button type="button" data-val="pc" aria-pressed="false">💻 PCポータル</button>
+                <button type="button" data-val="both" aria-pressed="false">📱+💻 両方</button>
+            </div>
+        </div>
+        <div class="group">
+            <span class="label">ボタンの形</span>
+            <div class="seg" id="ctl-shape">
+                <button type="button" data-sc="30px" data-home="50%" aria-pressed="true">カプセル / 丸</button>
+                <button type="button" data-sc="10px" data-home="16px" aria-pressed="false">角丸（スクエア調）</button>
+            </div>
+        </div>
+        <div class="group">
+            <label class="check">
+                <input type="checkbox" id="ctl-icons">
+                ボタンにアイコンを表示（候補3は常時表示）
+            </label>
+        </div>
+    </div>
+
+    <!-- 年間シーズナル＆イベント ホームボタン一覧ギャラリー -->
+    <div class="seasonal-gallery-box">
+        <div class="seasonal-gallery-head">
+            <h2 class="seasonal-gallery-title" style="margin:0; border:none; padding:0; font-size:15px;">
+                🗓️ 候補1「シーズナル・モチーフ」年間イベント＆四季の連動ホームボタン一覧（全13種）
+            </h2>
+            <p class="seasonal-gallery-sub">アイコンをクリックすると、下の「候補1」カードのスマホ＆PCプレビューがそのイベントに切り替わります</p>
+        </div>
+        <div class="seasonal-gallery-grid" id="seasonal-gallery"></div>
+    </div>
+
+    <!-- デザイン候補一覧 -->
+    <div class="cands-grid" id="cands-grid"></div>
+
+    <!-- 候補比較表 -->
+    <h2>デザイン候補5案＋現行の比較まとめ</h2>
+    <div class="table-wrap">
+        <table class="spec">
+            <thead>
+                <tr>
+                    <th>項目</th>
+                    <th>【現行】グラデーション</th>
+                    <th>候補1：季節・イベント（全13種）</th>
+                    <th>候補2：フロスト＆クリーン</th>
+                    <th>候補3：親しみやすい</th>
+                    <th>候補4：立体・物理ボタン</th>
+                    <th>候補5：和モダン</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <th>区分</th>
+                    <td>現在の標準</td>
+                    <td><strong>必須案1（大幅拡充）</strong></td>
+                    <td><strong>必須案2</strong></td>
+                    <td><strong>必須案3</strong></td>
+                    <td>お任せ案1</td>
+                    <td>お任せ案2</td>
+                </tr>
+                <tr>
+                    <th>ショートカットの表現</th>
+                    <td>2色グラデーション＋ドロップシャドウ</td>
+                    <td>四季・年中行事の彩り（Xmasは<strong>赤と緑／赤と白／赤と緑と黄色</strong>の3種グラデーション対応）＋右下に1つのイベント透かしSVG</td>
+                    <td>1pxインナーハイライト枠 or 白カード＋右上の矢印（↗）</td>
+                    <td>白丸アイコンバッジ＋内ステッチ枠＋大きめ太字</td>
+                    <td>下部4pxの立体リム＋押すとカチッと沈む物理キー感</td>
+                    <td>日本の伝統色＋和紙テクスチャ＋金茶の内細枠・菱紋</td>
+                </tr>
+                <tr>
+                    <th>連動ホームボタンのマーク</th>
+                    <td>標準の塗りつぶし家マーク</td>
+                    <td><strong>13種の行事・季節アイコンに変化</strong>（🎄頂上に星を置いたもみの木／🛷サンタのソリ／🎁プレゼント箱／🎋笹と短冊・一番星／🌻海と太陽ハウス／🌸五弁の本桜／🎍鏡餅／❄️雪結晶／🎎お雛様／🎆花火／🏮盆提灯／🍁紅葉／🎃カボチャ）</td>
+                    <td><strong>最新Web UI調の角丸デュオトーン線画ホーム（単一アイコン）</strong>（配色4種）</td>
+                    <td><strong>温かい窓の明かりがある丸みのお家マーク（単一アイコン）</strong>（配色4種）</td>
+                    <td><strong>メカニカルキー刻印調の立体ハウス（単一アイコン）</strong>（配色4種）</td>
+                    <td><strong>家紋「庵（いおり・切妻屋根）」調の和風ハウス（単一アイコン）</strong>（伝統色5種）</td>
+                </tr>
+                <tr>
+                    <th>視認性・押しやすさ</th>
+                    <td>○ 標準的</td>
+                    <td>◎ 背後の不要な重なりを省き、季節感とスッキリした視認性を両立</td>
+                    <td>◎ スタイリッシュで業務画面に馴染む</td>
+                    <td>◎ <strong>最も迷いにくい（全世代向け）</strong></td>
+                    <td>◎ <strong>「押せる場所」が直感的に分かる</strong></td>
+                    <td>○ 落ち着いていて目が疲れない</td>
+                </tr>
+                <tr>
+                    <th>おすすめの活用場面</th>
+                    <td>ベーシックな初期値として維持</td>
+                    <td>クリスマス（3種のモチーフ×3種のグラデーション）・春の桜・七夕・夏・ハロウィン・お正月等の行事演出</td>
+                    <td>モダンなWebアプリ風の画面にしたい利用者</td>
+                    <td>スマホ操作に不慣れな方や幅広い年齢層が使う環境</td>
+                    <td>タッチパネル感覚でハッキリした手応えが欲しい方</td>
+                    <td>管理組合・地域コミュニティ・落ち着いた画面が好みの方</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 🎨 デザイン設定モーダルへの組み込みイメージ -->
+    <h2>🎨「デザイン設定」モーダルへの追加イメージ</h2>
+    <p class="lead" style="margin-bottom: 14px;">
+        実際のポータルにある「🎨（デザイン設定）」や「🔒 管理者設定」に組み込む場合、以下のように<strong>「デザインスタイル」</strong>を選べるセクションを追加し、「シーズナル・モチーフ」選択時には<strong>「季節・イベントに合わせて自動切替（または好きな行事を手動固定）」</strong>を選べるようにすると運用もスムーズです。
+    </p>
+    <div class="modal-sim">
+        <div class="modal-sim-header">
+            <span>🎨 デザイン設定（組み込みイメージ）</span>
+            <span style="font-size:12px; opacity:0.85;">ショートカットとホームボタンに連動</span>
+        </div>
+        <div class="modal-sim-body">
+            <div style="font-size:11px; font-weight:700; color:#5b6672; margin-bottom:6px;">デザインスタイルを選択（クリックすると該当カードへ移動します）</div>
+            <div class="style-cards-sim" id="sim-cards"></div>
+        </div>
+    </div>
+</div>
+
+<!-- スマホ画面テンプレート -->
+<template id="tpl-phone">
+    <div class="phone">
+        <div class="screen">
+            <div class="k-header"><span class="k-header-sub">≡</span>ポータル</div>
+            <div class="k-scroll">
+                <div class="k-card">
+                    <div class="pc-row">
+                        <a class="btn-inquiry tap-target" href="#inquiry" data-nav="お問い合わせ">📩 お問い合わせ（デジタル委員会宛て）</a>
+                    </div>
+                    <div class="pc-shortcuts"></div>
+                    <div class="pc-config">
+                        <span class="pc-config-hint">🎨で行事・配色を順送りできます</span>
+                        <button class="btn-config" type="button" title="デザイン設定" data-action="palette">🎨</button>
+                        <button class="btn-config" type="button" title="ショートカットを編集" data-action="settings">⚙️</button>
+                    </div>
+                </div>
+                <div class="k-card">
+                    <div class="k-card-title">お知らせ</div>
+                    <div class="k-line" style="width:92%"></div>
+                    <div class="k-line" style="width:76%"></div>
+                    <div class="k-line" style="width:84%"></div>
+                </div>
+                <div class="k-card">
+                    <div class="k-card-title">スペース・アプリ一覧</div>
+                    <div class="k-line" style="width:68%"></div>
+                    <div class="k-line" style="width:85%"></div>
+                </div>
+            </div>
+            <a class="btn-home tap-target" href="#home" data-nav="ホーム（モバイル版ポータル）" aria-label="ホーム">
+                <span class="home-icon-wrap"></span>
+            </a>
+            <div class="toast"></div>
+        </div>
+    </div>
+</template>
+
+<!-- PC版ポータル画面テンプレート -->
+<template id="tpl-pc">
+    <div class="pc-preview">
+        <div class="pc-browser-bar">
+            <span class="pc-dot r"></span><span class="pc-dot y"></span><span class="pc-dot g"></span>
+            <span class="pc-browser-title">kintone ポータル（PC表示プレビュー）</span>
+        </div>
+        <div class="pc-portal-header">
+            <span>🏠 ポータル</span>
+            <span style="font-weight:400; color:#94a3b8;">PC版上部ショートカット領域</span>
+        </div>
+        <div class="pc-portal-body">
+            <div class="pc-bar-shortcuts"></div>
+            <div class="pc-dummy-grid">
+                <div class="pc-dummy-card">
+                    <div class="pc-dummy-title">お知らせ掲示板</div>
+                    <div class="k-line" style="width:90%"></div>
+                    <div class="k-line" style="width:72%"></div>
+                </div>
+                <div class="pc-dummy-card">
+                    <div class="pc-dummy-title">未処理・通知</div>
+                    <div class="k-line" style="width:80%"></div>
+                    <div class="k-line" style="width:60%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+
+<script>
+(function () {
+    'use strict';
+
+    // ショートカット項目
+    var SHORTCUT_ITEMS = [
+        { label: '管理規約', icon: '📘' },
+        { label: '意見書', icon: '✉️' },
+        { label: '施設予約', icon: '🏢' },
+        { label: 'カレンダー', icon: '📅' },
+        { label: '社内スペース', icon: '💬' },
+        { label: '資料室', icon: '📂' }
+    ];
+
+    // =========================================================================
+    // 桜の精細な花弁パス（先端に優美なV字の切れ込みが入ったハート型桜弁・中心(14,14)基準）
+    // =========================================================================
+    var SAKURA_PETAL_PATH = 'M14 13.6 C11.3 11.2 9.4 7.5 10.6 4.0 C11.3 2.1 12.7 1.8 13.4 3.0 L14 4.2 L14.6 3.0 C15.3 1.8 16.7 2.1 17.4 4.0 C18.6 7.5 16.7 11.2 14 13.6 Z';
+
+    // =========================================================================
+    // 1. 各デザイン＆全13種の季節・イベント専用「ホームボタンアイコンSVG」定義
+    //    ※ すべて背景装飾や複数モチーフの重なりを排除し、すっきりとした「1つのアイコン」に統一
+    // =========================================================================
+    var HOME_ICONS = {
+        // 【現行】標準の塗りつぶし家アイコン（単一アイコン）
+        current: {
+            title: '現行：標準ハウスアイコン（単一アイコン）',
+            desc: '現在の mobile-home-button.js / portal-navigation.js で使用しているシンプルな塗りつぶし家マークです。',
+            svg: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none">' +
+                    '<path d="M10 20V14H14V20H19V12H22L12 3L2 12H5V20H10Z" fill="currentColor"/>' +
+                 '</svg>'
+        },
+
+        // ---------------------------------------------------------------------
+        // 【候補1：シーズナル・モチーフ】全13種の季節・イベント専用ホームマーク（すべて単一アイコン）
+        // ---------------------------------------------------------------------
+        // 1. 🎍 正月（鏡餅単体）
+        seasonal_newyear: {
+            month: '1月',
+            shortName: '🎍 お正月',
+            title: '🎍 お正月連動：鏡餅（かがみもち）の単一アイコン',
+            desc: '背景の小さなサブ装飾や四方紅の重なりをなくし、二段の白い鏡餅と橙（だいだい）のみをすっきり1つで表現したお正月マークです。',
+            svg: '<svg width="26" height="26" viewBox="0 0 28 28" fill="none">' +
+                    '<circle cx="14" cy="6.2" r="2.6" fill="#fb923c"/>' +
+                    '<rect x="8.2" y="9.2" width="11.6" height="5" rx="2.5" fill="white"/>' +
+                    '<rect x="5.2" y="13.8" width="17.6" height="6.2" rx="3.1" fill="white"/>' +
+                    '<rect x="7.5" y="20.5" width="13" height="3.2" rx="1" fill="#fde047"/>' +
+                 '</svg>'
+        },
+
+        // 2. ❄️ 冬（雪の結晶単体）
+        seasonal_winter: {
+            month: '1〜2月',
+            shortName: '❄️ 冬（雪結晶）',
+            title: '❄️ 冬連動：雪の結晶（スノーフレーク）の単一アイコン',
+            desc: '家と雪結晶の重ね合わせをやめ、端正な六角形の雪の結晶（スノーフレーク）1つだけに絞ったすっきりとした冬マークです。',
+            svg: '<svg width="26" height="26" viewBox="0 0 28 28" fill="none">' +
+                    '<g stroke="white" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">' +
+                        '<path d="M14 3V25M4.5 8.5L23.5 19.5M23.5 8.5L4.5 19.5"/>' +
+                        '<path d="M11 5.5L14 8.2L17 5.5M11 22.5L14 19.8L17 22.5"/>' +
+                        '<path d="M5.5 12L8.8 11L7.8 7.6M20.2 20.4L19.2 17L22.5 16"/>' +
+                        '<path d="M7.8 20.4L8.8 17L5.5 16M22.5 12L19.2 11L20.2 7.6"/>' +
+                    '</g>' +
+                 '</svg>'
+        },
+
+        // 3. 🎎 ひな祭り（お雛様単体）
+        seasonal_hinamatsuri: {
+            month: '3月',
+            shortName: '🎎 ひな祭り',
+            title: '🎎 ひな祭り連動：お雛様（ひな人形）の単一アイコン',
+            desc: '背後にあった金屏風の背景図形やサブ装飾を削除し、お雛様のシルエット1つだけをすっきり際立たせた桃の節句マークです。',
+            svg: '<svg width="26" height="26" viewBox="0 0 28 28" fill="none">' +
+                    '<path d="M11 6.8L12.5 4L14 5.6L15.5 4L17 6.8H11Z" fill="#fde047"/>' +
+                    '<circle cx="14" cy="10" r="3.1" fill="white"/>' +
+                    '<path d="M14 13.5C9.2 13.5 6 18.2 6 23H22C22 18.2 18.8 13.5 14 13.5Z" fill="white"/>' +
+                    '<path d="M11.2 14.2L14 18.5L16.8 14.2" stroke="#db2777" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>' +
+                    '<path d="M10.2 20L14 17L17.8 20C16.6 21.4 15.4 21.8 14 21.8C12.6 21.8 11.4 21.4 10.2 20Z" fill="#fde047"/>' +
+                 '</svg>'
+        },
+
+        // 4. 🌸 春（五弁の本桜単体）
+        seasonal_spring: {
+            month: '3〜4月',
+            shortName: '🌸 春（本桜）',
+            title: '🌸 春連動：五弁の本桜（単一アイコン）',
+            desc: '背後の舞い花びら装飾を削除し、先端に切れ込みを持つ5枚の桜花弁と黄金の花芯からなる「一輪の本桜」だけを中央にすっきり配置しています。',
+            svg: '<svg width="27" height="27" viewBox="0 0 28 28" fill="none">' +
+                    '<g fill="white" fill-opacity="0.98">' +
+                        '<path d="' + SAKURA_PETAL_PATH + '"/>' +
+                        '<path d="' + SAKURA_PETAL_PATH + '" transform="rotate(72 14 14)"/>' +
+                        '<path d="' + SAKURA_PETAL_PATH + '" transform="rotate(144 14 14)"/>' +
+                        '<path d="' + SAKURA_PETAL_PATH + '" transform="rotate(216 14 14)"/>' +
+                        '<path d="' + SAKURA_PETAL_PATH + '" transform="rotate(288 14 14)"/>' +
+                    '</g>' +
+                    '<circle cx="14" cy="14" r="3.2" fill="#f472b6" fill-opacity="0.4"/>' +
+                    '<g stroke="#db2777" stroke-width="0.85" stroke-linecap="round">' +
+                        '<line x1="14" y1="14" x2="14" y2="10.4"/>' +
+                        '<line x1="14" y1="14" x2="17.4" y2="12.9"/>' +
+                        '<line x1="14" y1="14" x2="16.1" y2="16.9"/>' +
+                        '<line x1="14" y1="14" x2="11.9" y2="16.9"/>' +
+                        '<line x1="14" y1="14" x2="10.6" y2="12.9"/>' +
+                    '</g>' +
+                    '<circle cx="14" cy="10.2" r="0.85" fill="#fde047"/>' +
+                    '<circle cx="17.6" cy="12.8" r="0.85" fill="#fde047"/>' +
+                    '<circle cx="16.2" cy="17.1" r="0.85" fill="#fde047"/>' +
+                    '<circle cx="11.8" cy="17.1" r="0.85" fill="#fde047"/>' +
+                    '<circle cx="10.4" cy="12.8" r="0.85" fill="#fde047"/>' +
+                    '<circle cx="14" cy="14" r="1.2" fill="#be185d"/>' +
+                 '</svg>'
+        },
+
+        // 5. 🎋 七夕（笹と1枚の短冊の単一アイコン）
+        // 5. 🎋 七夕（以前の笹竹・揺れる短冊・一番星デザインに復元）
+        seasonal_tanabata: {
+            month: '7月',
+            shortName: '🎋 七夕',
+            title: '🎋 七夕連動：笹竹（ささたけ）と揺れる短冊・一番星マーク',
+            desc: '七夕テーマでは、しなやかな笹の葉に色とりどりの短冊と輝く一番星（織姫・彦星）を飾った以前の七夕専用マークに戻しています。',
+            svg: '<svg width="28" height="28" viewBox="0 0 28 28" fill="none">' +
+                    '<path d="M7 24C8.5 16 12.5 9 20 4.5" stroke="#6ee7b7" stroke-width="2" stroke-linecap="round"/>' +
+                    '<path d="M13 10C10 8.5 7 9.5 6 11.5C8.5 12 11 11.5 13 10Z" fill="#a7f3d0"/>' +
+                    '<path d="M17 7C14.5 5.2 11.5 5.8 10.5 7.5C13 8.2 15.2 8 17 7Z" fill="#a7f3d0"/>' +
+                    '<path d="M14.5 9.5V12" stroke="white" stroke-width="1.2"/>' +
+                    '<rect x="12.2" y="12" width="4.6" height="8.5" rx="1" transform="rotate(-6 14.5 12)" fill="white"/>' +
+                    '<path d="M19.5 6.5V9" stroke="white" stroke-width="1.2"/>' +
+                    '<rect x="17.5" y="9" width="4.4" height="8" rx="1" transform="rotate(6 19.5 9)" fill="#fbcfe8"/>' +
+                    '<path d="M8.5 15L9.6 17.5L12.2 18.6L9.6 19.7L8.5 22.2L7.4 19.7L4.8 18.6L7.4 17.5L8.5 15Z" fill="#fde047"/>' +
+                 '</svg>'
+        },
+
+        // 6. 🌻 夏（以前のサマーサン＆オーシャンウェーブハウスに復元）
+        seasonal_summer: {
+            month: '7〜8月',
+            shortName: '🌻 夏（海と太陽）',
+            title: '🌻 夏連動：サマーサン＆オーシャンウェーブハウス',
+            desc: '夏テーマでは、きらめく太陽と爽やかな波ラインを組み合わせた以前の夏仕様ホームアイコンに戻しています。',
+            svg: '<svg width="26" height="26" viewBox="0 0 26 26" fill="none">' +
+                    '<path d="M5 13L13 5.5L21 13V18.5H15V14H11V18.5H5V13Z" fill="white"/>' +
+                    '<path d="M3 21.5Q6.5 19.2 10 21.5T17 21.5T23 21.5" stroke="#a7f3d0" stroke-width="2.2" stroke-linecap="round" fill="none"/>' +
+                    '<circle cx="20" cy="6.5" r="2.5" fill="#fde047"/>' +
+                 '</svg>'
+        },
+
+        // 7. 🎆 夏祭り・花火大会（大輪の花火単体）
+        seasonal_fireworks: {
+            month: '8月',
+            shortName: '🎆 花火・夏祭り',
+            title: '🎆 夏祭り・花火大会連動：打ち上げ花火の単一アイコン',
+            desc: '下部の破線や周囲のサブ花火を削除し、中央に開く一輪の菊花火のみをすっきりと描いた夏祭りマークです。',
+            svg: '<svg width="26" height="26" viewBox="0 0 28 28" fill="none">' +
+                    '<circle cx="14" cy="14" r="2.3" fill="#fde047"/>' +
+                    '<path d="M14 4V8.5M14 19.5V24M4 14H8.5M19.5 14H24" stroke="white" stroke-width="2.2" stroke-linecap="round"/>' +
+                    '<path d="M6.9 6.9L10.1 10.1M17.9 17.9L21.1 21.1M21.1 6.9L17.9 10.1M10.1 17.9L6.9 21.1" stroke="#fde047" stroke-width="2" stroke-linecap="round"/>' +
+                 '</svg>'
+        },
+
+        // 8. 🏮 お盆（盆提灯の単一アイコン）
+        seasonal_obon: {
+            month: '8月',
+            shortName: '🏮 お盆',
+            title: '🏮 お盆連動：盆提灯（ぼんちょうちん）の単一アイコン',
+            desc: '下部にあった蓮の葉ラインや背後のミニ提灯を削除し、温かな灯りをともす盆提灯1つだけに絞った端正なマークです。',
+            svg: '<svg width="26" height="26" viewBox="0 0 28 28" fill="none">' +
+                    '<path d="M14 3V5.2" stroke="#fde047" stroke-width="1.8" stroke-linecap="round"/>' +
+                    '<rect x="10.2" y="5" width="7.6" height="2" rx="0.8" fill="#fde047"/>' +
+                    '<ellipse cx="14" cy="13" rx="7.6" ry="6.8" fill="white"/>' +
+                    '<path d="M6.8 10.6H21.2M6.8 15.4H21.2" stroke="#d97706" stroke-width="1.1" stroke-opacity="0.5"/>' +
+                    '<rect x="10.5" y="19" width="7" height="1.8" rx="0.7" fill="#fde047"/>' +
+                    '<path d="M12.5 20.8V24.5M15.5 20.8V24.5" stroke="#fcd34d" stroke-width="1.6" stroke-linecap="round"/>' +
+                 '</svg>'
+        },
+
+        // 9. 🍁 秋（紅葉の単一アイコン）
+        seasonal_autumn: {
+            month: '9〜11月',
+            shortName: '🍁 秋（紅葉）',
+            title: '🍁 秋連動：紅葉（もみじ）の単一アイコン',
+            desc: '家のくり抜きや背後のサブ紅葉をなくし、美しいもみじの葉1枚だけをすっきりと配置した秋マークです。',
+            svg: '<svg width="26" height="26" viewBox="0 0 28 28" fill="none">' +
+                    '<path d="M14 3L16.5 9.6L23 7L19.5 13L25.2 15.8L18.5 18.2L20.2 22.8L14 20.2L7.8 22.8L9.5 18.2L2.8 15.8L8.5 13L5 7L11.5 9.6L14 3Z" fill="white"/>' +
+                    '<path d="M14 20.2V25.2" stroke="#fde68a" stroke-width="2" stroke-linecap="round"/>' +
+                 '</svg>'
+        },
+
+        // 10. 🎃 ハロウィン（カボチャの単一アイコン）
+        seasonal_halloween: {
+            month: '10月',
+            shortName: '🎃 ハロウィン',
+            title: '🎃 ハロウィン連動：カボチャ（ジャック・オー・ランタン）の単一アイコン',
+            desc: '右上のサブ装飾を削除し、ジャック・オー・ランタンのカボチャ1つだけを中央にすっきりと配置しています。',
+            svg: '<svg width="26" height="26" viewBox="0 0 28 28" fill="none">' +
+                    '<path d="M12.5 5.5C12.5 3.8 14.2 2.5 16 2.8C15.2 4 15.2 5 15.5 5.8" stroke="#fde047" stroke-width="2.2" stroke-linecap="round"/>' +
+                    '<path d="M14 6.2C8.2 6.2 4 9.8 4 15.2C4 20.6 8.2 24 14 24C19.8 24 24 20.6 24 15.2C24 9.8 19.8 6.2 14 6.2Z" fill="white"/>' +
+                    '<path d="M9.5 11.5L11.8 14.5H7.5L9.5 11.5Z" fill="#581c87"/>' +
+                    '<path d="M18.5 11.5L20.5 14.5H16.2L18.5 11.5Z" fill="#581c87"/>' +
+                    '<path d="M14 14.2L15.3 16.3H12.7L14 14.2Z" fill="#581c87"/>' +
+                    '<path d="M8 18.2L10.2 19.8L12 18.5L14 20.2L16 18.5L17.8 19.8L20 18.2L18.6 21.3L16 20.2L14 21.8L12 20.2L9.4 21.3L8 18.2Z" fill="#581c87"/>' +
+                 '</svg>'
+        },
+
+        // 11. 🎄 クリスマス①（頂上に星を飾ったもみの木ツリー）
+        seasonal_christmas: {
+            month: '12月',
+            shortName: '🎄 Xmas（ツリー）',
+            title: '🎄 クリスマス①連動：頂上に星が輝くもみの木（クリスマスツリー）',
+            desc: 'もみの木の後ろにあった背景星をなくし、三段のもみの木の「頂上（てっぺん）」に黄金のトップスターをちょこんと載せた王道ツリーデザインです。配色も「赤と緑」「赤と白」「赤と緑と黄色」の3グラデーションから選べます。',
+            svg: '<svg width="26" height="26" viewBox="0 0 28 28" fill="none">' +
+                    '<path d="M14 6.4L8.5 12.6H11.5L7 17.8H10.5L5.8 22.6H22.2L17.5 17.8H21L16.5 12.6H19.5L14 6.4Z" fill="white"/>' +
+                    '<rect x="12" y="22.6" width="4" height="3" rx="0.7" fill="#fcd34d"/>' +
+                    '<path d="M14 1.2L14.95 3.35L17.3 3.65L15.55 5.2L16.05 7.45L14 6.25L11.95 7.45L12.45 5.2L10.7 3.65L13.05 3.35L14 1.2Z" fill="#fde047"/>' +
+                 '</svg>'
+        },
+
+        // 12. 🛷 クリスマス②（サンタのソリの単一アイコン）
+        seasonal_christmas_sleigh: {
+            month: '12月',
+            shortName: '🛷 Xmas（ソリ）',
+            title: '🛷 クリスマス②連動：サンタのソリの単一アイコン',
+            desc: '背後に重なっていたプレゼント袋や星などの装飾を削除し、くるんと巻いた黄金のランナー（滑走部）を持つクラシカルなソリ1つだけをすっきり描いたデザインです。配色は「赤と白」を既定とし、3種のXmasグラデーションすべてに切り替え可能です。',
+            svg: '<svg width="26" height="26" viewBox="0 0 28 28" fill="none">' +
+                    '<path d="M4.2 10.5C4.2 16.5 7.5 18.8 13.5 18.8H20.4C22.2 18.8 23.6 16.8 24.5 13.6C22.0 14.0 20.4 13.4 19.2 12.2H8.8C7.0 12.2 5.5 11.5 4.2 10.5Z" fill="white"/>' +
+                    '<path d="M6.5 14.6H19.4" stroke="#dc2626" stroke-width="1.4" stroke-linecap="round"/>' +
+                    '<path d="M3.2 22.2H21.8C24.2 22.2 25.8 20.4 25.8 18.2C25.8 16.7 24.5 15.9 23.4 16.7C22.6 17.3 23.0 18.6 24.0 18.6" stroke="#fde047" stroke-width="2" stroke-linecap="round" fill="none"/>' +
+                    '<path d="M8.5 18.8V22.2M17.5 18.8V22.2" stroke="#fde047" stroke-width="1.9" stroke-linecap="round"/>' +
+                 '</svg>'
+        },
+
+        // 13. 🎁 クリスマス③（プレゼントボックスの単一アイコン）
+        seasonal_christmas_present: {
+            month: '12月',
+            shortName: '🎁 Xmas（贈り物）',
+            title: '🎁 クリスマス③連動：リボン付きプレゼントの単一アイコン',
+            desc: 'クリスマスのもう一つの象徴である「リボン付きプレゼントボックス」を、背景装飾なしの1つのアイコンとしてすっきりデザインした候補です。配色は「赤と緑と黄色」を既定とし、3種のXmasグラデーションすべてに切り替え可能です。',
+            svg: '<svg width="26" height="26" viewBox="0 0 28 28" fill="none">' +
+                    '<rect x="6" y="11.5" width="16" height="12.5" rx="1.8" fill="white"/>' +
+                    '<rect x="4.8" y="8.2" width="18.4" height="3.8" rx="1.2" fill="white"/>' +
+                    '<path d="M14 8.2V24M6 16.8H22" stroke="#fde047" stroke-width="2.6"/>' +
+                    '<path d="M14 8.2C11.2 4.2 7.8 5.2 9.5 7.8C10.5 8.4 14 8.2 14 8.2ZM14 8.2C16.8 4.2 20.2 5.2 18.5 7.8C17.5 8.4 14 8.2 14 8.2Z" stroke="#fde047" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
+                 '</svg>'
+        },
+
+        // ---------------------------------------------------------------------
+        // 【候補2〜5】各デザインスタイルの専用連動ホームマーク（すべて単一アイコン）
+        // ---------------------------------------------------------------------
+        modern: {
+            title: 'モダン連動：デュオトーン線画ハウス（単一アイコン）',
+            desc: '下部のドックバー装飾を省き、最新のWebアプリで主流の角丸ストローク線画＋半透明デュオトーン塗りのハウスアイコン1つですっきりと表現しています。',
+            svg: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none">' +
+                    '<path d="M4.5 10.8L11.1 4.9C11.6 4.45 12.4 4.45 12.9 4.9L19.5 10.8V18.8C19.5 19.7 18.7 20.5 17.8 20.5H6.2C5.3 20.5 4.5 19.7 4.5 18.8V10.8Z" fill="currentColor" fill-opacity="0.16" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>' +
+                    '<path d="M9.5 15.8H14.5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>' +
+                 '</svg>'
+        },
+
+        friendly: {
+            title: '親しみやすい連動：丸みのある温かいお家マーク（単一アイコン）',
+            desc: '屋根の後ろの煙突や文字ラベルを省き、丸みのある優しいシルエットに温かい窓が灯るお家アイコン1つに統一して見た目をすっきりさせています。',
+            svg: '<svg width="26" height="26" viewBox="0 0 26 26" fill="none">' +
+                    '<path d="M3.2 12.8L11.8 4.8C12.5 4.1 13.5 4.1 14.2 4.8L22.8 12.8C23.5 13.4 23.1 14.6 22.1 14.6H20.2V20.5C20.2 21.6 19.3 22.5 18.2 22.5H7.8C6.7 22.5 5.8 21.6 5.8 20.5V14.6H3.9C2.9 14.6 2.5 13.4 3.2 12.8Z" fill="white"/>' +
+                    '<rect x="10.4" y="13.2" width="5.2" height="5.2" rx="1.5" fill="#f59e0b"/>' +
+                 '</svg>'
+        },
+
+        tactile: {
+            title: '立体キー連動：キーキャップ刻印ハウス（単一アイコン）',
+            desc: '下部のLEDバー装飾を省き、物理スイッチのキートップ刻印をイメージした太めで視認性の高いホームアイコン1つに絞っています。',
+            svg: '<svg width="25" height="25" viewBox="0 0 26 26" fill="none">' +
+                    '<path d="M4.5 12.8L13 5L21.5 12.8V20.2C21.5 21.1 20.8 21.8 19.9 21.8H15.2V16H10.8V21.8H6.1C5.2 21.8 4.5 21.1 4.5 20.2V12.8Z" fill="white"/>' +
+                 '</svg>'
+        },
+
+        wamoden: {
+            title: '和モダン連動：家紋「庵（いおり）」調ハウス（単一アイコン）',
+            desc: '日本の家紋「庵紋（いおりもん・切妻屋根）」をモチーフにした、装飾過多にならない端正な単一シルエットの和風ホームマークです。',
+            svg: '<svg width="26" height="26" viewBox="0 0 26 26" fill="none">' +
+                    '<path d="M2.5 13.2C6.5 11.4 10.2 8.4 13 5C15.8 8.4 19.5 11.4 23.5 13.2" stroke="white" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>' +
+                    '<rect x="6.8" y="13.2" width="12.4" height="8" rx="0.8" stroke="white" stroke-width="1.9"/>' +
+                    '<path d="M13 13.2V21.2" stroke="var(--wa-accent, #e2c684)" stroke-width="1.5"/>' +
+                 '</svg>'
+        }
+    };
+
+    // =========================================================================
+    // 2. ショートカットボタン内の季節・イベント透かしSVG（全13種・右下1つのみ）
+    // =========================================================================
+    var BIG_SAKURA_PETAL = 'M22 21.2 C17.6 17.5 14.5 11.6 16.5 6.0 C17.6 3.0 19.8 2.5 21.0 4.5 L22 6.4 L23.0 4.5 C24.2 2.5 26.4 3.0 27.5 6.0 C29.5 11.6 26.4 17.5 22 21.2 Z';
+
+    var SEASON_MOTIFS = {
+        newyear: {
+            big: '<svg viewBox="0 0 44 44" fill="none">' +
+                    '<circle cx="22" cy="10" r="4" fill="white"/>' +
+                    '<rect x="13" y="15" width="18" height="7.5" rx="3.75" fill="white"/>' +
+                    '<rect x="8.5" y="22" width="27" height="9.5" rx="4.75" fill="white"/>' +
+                    '<rect x="12" y="32" width="20" height="4.5" rx="1.5" fill="white"/>' +
+                 '</svg>'
+        },
+        hinamatsuri: {
+            big: '<svg viewBox="0 0 44 44" fill="none">' +
+                    '<path d="M22 6L38 15L22 24L6 15L22 6Z" fill="white"/>' +
+                    '<path d="M6 21L22 30L38 21" stroke="white" stroke-width="3" stroke-linecap="round"/>' +
+                    '<path d="M6 27L22 36L38 27" stroke="white" stroke-width="3" stroke-linecap="round"/>' +
+                 '</svg>'
+        },
+        spring: {
+            big: '<svg viewBox="0 0 44 44" fill="none">' +
+                    '<g fill="white">' +
+                        '<path d="' + BIG_SAKURA_PETAL + '"/>' +
+                        '<path d="' + BIG_SAKURA_PETAL + '" transform="rotate(72 22 22)"/>' +
+                        '<path d="' + BIG_SAKURA_PETAL + '" transform="rotate(144 22 22)"/>' +
+                        '<path d="' + BIG_SAKURA_PETAL + '" transform="rotate(216 22 22)"/>' +
+                        '<path d="' + BIG_SAKURA_PETAL + '" transform="rotate(288 22 22)"/>' +
+                    '</g>' +
+                    '<circle cx="22" cy="22" r="3.2" fill="#be185d"/>' +
+                 '</svg>'
+        },
+        tanabata: {
+            big: '<svg viewBox="0 0 44 44" fill="none">' +
+                    '<path d="M8 38C14 25 22 14 36 6" stroke="white" stroke-width="2.5" stroke-linecap="round"/>' +
+                    '<rect x="22" y="16" width="8" height="15" rx="1.5" transform="rotate(-8 22 16)" fill="white"/>' +
+                    '<path d="M14 10L16 15L21 17L16 19L14 24L12 19L7 17L12 15L14 10Z" fill="white"/>' +
+                 '</svg>'
+        },
+        summer: {
+            big: '<svg viewBox="0 0 40 40" fill="none">' +
+                    '<circle cx="26" cy="24" r="11" stroke="white" stroke-width="2.5"/>' +
+                    '<circle cx="15" cy="14" r="5" stroke="white" stroke-width="2"/>' +
+                    '<path d="M4 32Q12 27 20 32T36 32" stroke="white" stroke-width="2.5" stroke-linecap="round"/>' +
+                 '</svg>'
+        },
+        fireworks: {
+            big: '<svg viewBox="0 0 44 44" fill="none">' +
+                    '<circle cx="22" cy="22" r="3.5" fill="white"/>' +
+                    '<path d="M22 5V12M22 32V39M5 22H12M32 22H39M10 10L15 15M29 29L34 34M34 10L29 15M15 29L10 34" stroke="white" stroke-width="2.8" stroke-linecap="round"/>' +
+                 '</svg>'
+        },
+        obon: {
+            big: '<svg viewBox="0 0 44 44" fill="none">' +
+                    '<rect x="16" y="7" width="12" height="3" rx="1" fill="white"/>' +
+                    '<ellipse cx="22" cy="20" rx="12" ry="10.5" fill="white"/>' +
+                    '<rect x="16.5" y="30" width="11" height="3" rx="1" fill="white"/>' +
+                 '</svg>'
+        },
+        autumn: {
+            big: '<svg viewBox="0 0 40 40" fill="none"><path d="M20 3L23 12L32 8L27 17L37 21L26 25L29 33L20 29L11 33L14 25L3 21L13 17L8 8L17 12L20 3Z" fill="white"/></svg>'
+        },
+        halloween: {
+            big: '<svg viewBox="0 0 44 44" fill="none">' +
+                    '<path d="M20 7C20 4.5 22.5 3 24.5 3.5C23.2 5 23.2 6.5 23.5 7.5" stroke="white" stroke-width="2.8" stroke-linecap="round"/>' +
+                    '<path d="M22 8C13 8 7 13 7 21C7 29 13 34 22 34C31 34 37 29 37 21C37 13 31 8 22 8Z" fill="white"/>' +
+                    '<path d="M15 16L18.5 20.5H12L15 16ZM29 16L32 20.5H25.5L29 16ZM22 19.5L24 22.5H20L22 19.5ZM13 25.5L16.5 27.5L19.5 25.8L22 28L24.5 25.8L27.5 27.5L31 25.5L29 29.8L25 28.2L22 30.5L19 28.2L15 29.8L13 25.5Z" fill="#3b0764"/>' +
+                 '</svg>'
+        },
+        christmas: {
+            // クリスマス①：頂上に星を載せたもみの木
+            big: '<svg viewBox="0 0 44 44" fill="none">' +
+                    '<path d="M22 9.5L12.5 19.5H17.2L10.5 28H16.2L8.5 36.5H35.5L27.8 28H33.5L26.8 19.5H31.5L22 9.5Z" fill="white"/>' +
+                    '<rect x="18.8" y="36.5" width="6.4" height="4.5" rx="1" fill="white"/>' +
+                    '<path d="M22 2L23.5 5.3L27.1 5.7L24.4 8.1L25.1 11.6L22 9.8L18.9 11.6L19.6 8.1L16.9 5.7L20.5 5.3L22 2Z" fill="#fde047"/>' +
+                 '</svg>'
+        },
+        christmas_sleigh: {
+            // クリスマス②：サンタのソリ単体
+            big: '<svg viewBox="0 0 44 44" fill="none">' +
+                    '<path d="M6 16C6 25 11 28.5 20.5 28.5H31C33.5 28.5 36 25.5 37.5 20.5C34 21 31.5 20 30 18.5H12.5C9.8 18.5 8 17.5 6 16Z" fill="white"/>' +
+                    '<path d="M4.5 34.5H33.5C37.5 34.5 40 31.7 40 28C40 25.7 38 24.5 36.2 25.7C35 26.7 35.6 28.7 37.2 28.7" stroke="white" stroke-width="2.8" stroke-linecap="round"/>' +
+                    '<path d="M13 28.5V34.5M27 28.5V34.5" stroke="white" stroke-width="2.8" stroke-linecap="round"/>' +
+                 '</svg>'
+        },
+        christmas_present: {
+            // クリスマス③：リボン付きプレゼントボックス単体
+            big: '<svg viewBox="0 0 44 44" fill="none">' +
+                    '<rect x="9" y="18" width="26" height="20" rx="2.5" fill="white"/>' +
+                    '<rect x="7" y="12.5" width="30" height="6" rx="2" fill="white"/>' +
+                    '<path d="M22 12.5C17.5 6.5 12.5 8 15 12C16.5 12.8 22 12.5 22 12.5ZM22 12.5C26.5 6.5 31.5 8 29 12C27.5 12.8 22 12.5 22 12.5Z" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>' +
+                 '</svg>'
+        },
+        winter: {
+            big: '<svg viewBox="0 0 40 40" fill="none"><path d="M20 4V36M6 12L34 28M34 12L6 28M15 7L20 12L25 7M15 33L20 28L25 33" stroke="white" stroke-width="2.5" stroke-linecap="round"/></svg>'
+        }
+    };
+
+    // 候補1の季節・イベント全13種リスト
+    var SEASONAL_SUBS = [
+        { key: 'christmas', label: '🎄 Xmas（ツリー）' },
+        { key: 'christmas_sleigh', label: '🛷 Xmas（ソリ）' },
+        { key: 'christmas_present', label: '🎁 Xmas（贈り物）' },
+        { key: 'spring', label: '🌸 春（本桜）' },
+        { key: 'halloween', label: '🎃 ハロウィン' },
+        { key: 'newyear', label: '🎍 お正月' },
+        { key: 'winter', label: '❄️ 冬（雪結晶）' },
+        { key: 'hinamatsuri', label: '🎎 ひな祭り' },
+        { key: 'tanabata', label: '🎋 七夕' },
+        { key: 'summer', label: '🌻 夏（海と太陽）' },
+        { key: 'fireworks', label: '🎆 花火・夏祭り' },
+        { key: 'obon', label: '🏮 お盆' },
+        { key: 'autumn', label: '🍁 秋（紅葉）' }
+    ];
+
+    // クリスマス用グラデーション3種定義
+    var XMAS_GRADIENTS = [
+        { key: 'red_green', label: '🔴🟢 赤と緑のグラデーション' },
+        { key: 'red_white', label: '🔴⚪ 赤と白のグラデーション' },
+        { key: 'red_green_yellow', label: '🔴🟢🟡 赤と緑と黄色のグラデーション' }
+    ];
+    var DEFAULT_XMAS_GRAD_BY_SUB = {
+        christmas: 'red_green',
+        christmas_sleigh: 'red_white',
+        christmas_present: 'red_green_yellow'
+    };
+
+    // 現行＋5候補の定義
+    var CANDIDATES = [
+        {
+            id: 'current',
+            no: '現行',
+            isCurrent: true,
+            styleClass: 'style-current',
+            title: 'グラデーション・ベーシック（現行）',
+            tag: '現在のデザイン',
+            tagClass: 'cur',
+            concept: '現在の portal-navigation.js の標準デザイン。斜め135度のグラデーション背景と白太字、ホームボタンは塗りつぶしの標準家マーク（1アイコン）です。',
+            subLabel: '現行カラー切替（4色）',
+            subs: [
+                { key: 'navy', label: 'ネイビー（既定）' },
+                { key: 'green', label: 'グリーン' },
+                { key: 'purple', label: 'パープル' },
+                { key: 'standard', label: 'スタンダード' }
+            ],
+            good: 'シンプルで無駄がなく、Kintoneの標準画面の中でもボタン位置がひと目で分かる',
+            note: '全員同じ家マーク・同じ質感のため、イベント感やデザインの個性は控えめ'
+        },
+        {
+            id: 'seasonal',
+            no: '候補 1',
+            styleClass: 'style-seasonal',
+            title: 'シーズナル・モチーフ（四季＆年中行事 全13種）',
+            tag: '必須案：季節・イベント',
+            tagClass: 'req',
+            concept: '七夕と夏のホームボタンを以前のデザインに復元し、Xmasツリーは頂上に星を配置！さらにXmas全体で「赤と緑」「赤と白」「赤と緑と黄色」の3種のグラデーションを追加・切り替えできるようにしています。',
+            subLabel: '季節・イベント切替（全13種）',
+            subs: SEASONAL_SUBS,
+            good: 'Xmasは3種のモチーフ×3種のグラデーション（赤×緑／赤×白／赤×緑×黄色）を自由に組み合わせ可能',
+            note: 'ツリーデザインは頂上に黄金の星が輝き、七夕（笹竹と短冊・星）と夏（太陽と波のハウス）も以前のデザインで統一'
+        },
+        {
+            id: 'modern',
+            no: '候補 2',
+            styleClass: 'style-modern',
+            title: 'フロスト＆クリーン（モダンWeb UI）',
+            tag: '必須案：モダン',
+            tagClass: 'req',
+            concept: '最近のWebデザイン・SaaSで採用されるフロストガラス＆クリーンボーダー調。ホームボタンも下部バー等の余計な装飾を省き、「角丸デュオトーン線画ハウス」1つのみで洗練させています。',
+            subLabel: 'モダン配色切替（4種）',
+            subs: [
+                { key: 'slate', label: 'ダークスレート' },
+                { key: 'clean', label: 'クリーンホワイト' },
+                { key: 'indigo', label: 'オーロラインディゴ' },
+                { key: 'mint', label: 'サイバーエメラルド' }
+            ],
+            good: 'ホームボタンが線画＋半透明塗りの単一モダンアイコンになり、クリーンホワイト時は白ガラス調FABに連動',
+            note: 'ショートカット右端の「↗」や1pxハイライト枠など、現代的なWebアプリの統一感が出る'
+        },
+        {
+            id: 'friendly',
+            no: '候補 3',
+            styleClass: 'style-friendly',
+            title: 'ユニバーサル・ソフト（親しみやすい）',
+            tag: '必須案：老若男女に親しみやすい',
+            tagClass: 'req',
+            concept: '誰が見ても優しく分かりやすいユニバーサルデザイン。ホームボタンも煙突や文字ラベルを省き、「温かい窓の明かりがついた丸みのあるお家アイコン」1つに絞ってすっきり見やすくしています。',
+            subLabel: 'やさしい色切替（4種）',
+            subs: [
+                { key: 'sky', label: '空色ブルー' },
+                { key: 'warm', label: 'ひだまりオレンジ' },
+                { key: 'leaf', label: '若葉グリーン' },
+                { key: 'berry', label: 'いちごピンク' }
+            ],
+            good: '丸みのあるお家アイコン1つと白フチ取りで、全世代にとって親しみやすく見た目もすっきり',
+            note: 'ショートカット側も白丸アイコンバッジ＋内ステッチ枠で、押し間違いを防ぎやすい'
+        },
+        {
+            id: 'tactile',
+            no: '候補 4',
+            styleClass: 'style-tactile',
+            title: 'タクタイル・3Dスイッチ（立体・物理キー風）',
+            tag: 'お任せ案1：直感的な押せる感',
+            tagClass: 'opt',
+            concept: '実際の押しボタンのように4pxの「厚み（リム）」を持たせたデザイン。ホームボタンも下部バーをなくし、物理キーキャップの刻印調ハウスアイコン1つに統一しています。',
+            subLabel: 'スイッチ色切替（4種）',
+            subs: [
+                { key: 'blue', label: 'コバルトブルー' },
+                { key: 'emerald', label: 'エメラルド' },
+                { key: 'amber', label: 'アンバーオレンジ' },
+                { key: 'graphite', label: 'グラファイト黒' }
+            ],
+            good: '押すと物理的にカチッと沈み込み、単一の太め刻印アイコンでスイッチ感がストレートに伝わる',
+            note: '「押せるボタンである」ことが視覚・触覚の両面でハッキリ伝わる'
+        },
+        {
+            id: 'wamoden',
+            no: '候補 5',
+            styleClass: 'style-wamoden',
+            title: '和モダン・ナチュラル（伝統色＆家紋調）',
+            tag: 'お任せ案2：品格と温もり',
+            tagClass: 'opt',
+            concept: '日本の伝統色と和紙テクスチャ、金茶の内細枠をあしらったデザイン。ホームボタンは日本の家紋「庵（いおり：切妻屋根）」をモチーフにした端正な単一アイコンに連動します。',
+            subLabel: '伝統色切替（5種）',
+            subs: [
+                { key: 'aitetsu', label: '藍鉄（あいてつ）' },
+                { key: 'matcha', label: '千歳緑（ちとせみどり）' },
+                { key: 'akane', label: '茜（あかね）' },
+                { key: 'kurumi', label: '胡桃染（木目調）' },
+                { key: 'fujimurasaki', label: '藤紫（ふじむらさき）' }
+            ],
+            good: '切妻屋根のシンプルな和風ホームマークが伝統色・金茶枠と美しく調和し、品格ある佇まいになる',
+            note: '管理規約や施設予約など、マンション管理組合・地域団体・落ち着いたポータルに特に好相性'
+        }
+    ];
+
+    var gridEl = document.getElementById('cands-grid');
+    var tplPhone = document.getElementById('tpl-phone');
+    var tplPc = document.getElementById('tpl-pc');
+    var seasonalSetter = null; // 上部ギャラリーから候補1を切り替えるためのコールバック
+
+    // 各候補カードを生成
+    CANDIDATES.forEach(function (cand) {
+        var card = document.createElement('section');
+        card.className = 'cand-card' + (cand.isCurrent ? ' is-current' : '');
+        card.id = 'card-' + cand.id;
+
+        var defaultSub = cand.subs[0].key;
+
+        // 1. ヘッダー
+        var head = document.createElement('div');
+        head.className = 'cand-head';
+        head.innerHTML =
+            '<div class="cand-title-row">' +
+                '<span class="cand-no">' + cand.no + '</span>' +
+                '<h3 class="cand-title">' + cand.title + '</h3>' +
+                '<span class="cand-tag ' + cand.tagClass + '">' + cand.tag + '</span>' +
+            '</div>' +
+            '<p class="cand-concept">' + cand.concept + '</p>';
+        card.appendChild(head);
+
+        // 2. サブテーマ切替バー
+        var picker = document.createElement('div');
+        picker.className = 'sub-picker';
+        var pickerHeader = document.createElement('div');
+        pickerHeader.className = 'sub-picker-header';
+        var pickerLabel = document.createElement('span');
+        pickerLabel.className = 'sub-picker-label';
+        pickerLabel.textContent = cand.subLabel;
+        pickerHeader.appendChild(pickerLabel);
+        picker.appendChild(pickerHeader);
+
+        var seg = document.createElement('div');
+        seg.className = 'seg';
+
+        // 候補1（seasonal）専用のXmasグラデーション切替バー（赤と緑・赤と白・赤と緑と黄色）
+        var xmasGradWrap = null;
+        var xmasGradSeg = null;
+        if (cand.id === 'seasonal') {
+            xmasGradWrap = document.createElement('div');
+            xmasGradWrap.style.marginTop = '6px';
+            xmasGradWrap.style.paddingTop = '6px';
+            xmasGradWrap.style.borderTop = '1px dashed #cbd5e1';
+
+            var xmasHeader = document.createElement('div');
+            xmasHeader.className = 'sub-picker-header';
+            xmasHeader.style.marginBottom = '4px';
+            var xmasLabel = document.createElement('span');
+            xmasLabel.className = 'sub-picker-label';
+            xmasLabel.textContent = '🎅 Xmasグラデーション配色切替（3種：赤と緑／赤と白／赤と緑と黄色）';
+            xmasHeader.appendChild(xmasLabel);
+            xmasGradWrap.appendChild(xmasHeader);
+
+            xmasGradSeg = document.createElement('div');
+            xmasGradSeg.className = 'seg';
+            XMAS_GRADIENTS.forEach(function (g, gIdx) {
+                var gb = document.createElement('button');
+                gb.type = 'button';
+                gb.textContent = g.label;
+                gb.setAttribute('data-grad-key', g.key);
+                gb.setAttribute('aria-pressed', gIdx === 0 ? 'true' : 'false');
+                gb.onclick = function () {
+                    applyXmasGradient(g.key);
+                };
+                xmasGradSeg.appendChild(gb);
+            });
+            xmasGradWrap.appendChild(xmasGradSeg);
+        }
+
+        // 3. ホームボタン連動拡大ショーケース
+        var showcase = document.createElement('div');
+        showcase.className = 'home-showcase ' + cand.styleClass;
+        showcase.setAttribute('data-sub', defaultSub);
+        showcase.innerHTML =
+            '<div class="home-showcase-preview">' +
+                '<a class="btn-home tap-target" href="#home-preview" data-nav="ホームボタン（拡大確認）" aria-label="ホームボタン拡大プレビュー">' +
+                    '<span class="home-icon-wrap"></span>' +
+                '</a>' +
+            '</div>' +
+            '<div class="home-showcase-info">' +
+                '<div class="home-showcase-title">🏠 連動ホームボタンのマーク</div>' +
+                '<div class="home-showcase-desc"></div>' +
+            '</div>';
+
+        // 4. プレビュー領域（スマホ＋PC）
+        var stage = document.createElement('div');
+        stage.className = 'preview-stage ' + cand.styleClass;
+        stage.setAttribute('data-sub', defaultSub);
+
+        // スマホ枠を複製
+        var phoneFrag = tplPhone.content.cloneNode(true);
+        var phoneShortcuts = phoneFrag.querySelector('.pc-shortcuts');
+        SHORTCUT_ITEMS.forEach(function (item) {
+            phoneShortcuts.appendChild(createShortcutButton(item));
+        });
+        stage.appendChild(phoneFrag);
+
+        // PC枠を複製
+        var pcFrag = tplPc.content.cloneNode(true);
+        var pcShortcuts = pcFrag.querySelector('.pc-bar-shortcuts');
+        SHORTCUT_ITEMS.forEach(function (item) {
+            pcShortcuts.appendChild(createShortcutButton(item));
+        });
+        stage.appendChild(pcFrag);
+
+        // Xmasグラデーション適用関数
+        function applyXmasGradient(gradKey) {
+            stage.setAttribute('data-xmas-grad', gradKey);
+            showcase.setAttribute('data-xmas-grad', gradKey);
+            if (xmasGradSeg) {
+                Array.prototype.forEach.call(xmasGradSeg.children, function (ch) {
+                    ch.setAttribute('aria-pressed', ch.getAttribute('data-grad-key') === gradKey ? 'true' : 'false');
+                });
+            }
+        }
+
+        // サブテーマ変更時の連動更新関数
+        function applyCandidateSubTheme(subKey) {
+            stage.setAttribute('data-sub', subKey);
+            showcase.setAttribute('data-sub', subKey);
+
+            // セグメントボタンの選択状態を同期
+            Array.prototype.forEach.call(seg.children, function (ch) {
+                ch.setAttribute('aria-pressed', ch.getAttribute('data-key') === subKey ? 'true' : 'false');
+            });
+
+            // ホームボタンのアイコンSVGをデザイン＆季節に合わせて更新
+            var iconSpec = getHomeIconSpec(cand.id, subKey);
+            stage.querySelectorAll('.home-icon-wrap').forEach(function (el) {
+                el.innerHTML = iconSpec.svg;
+            });
+            showcase.querySelectorAll('.home-icon-wrap').forEach(function (el) {
+                el.innerHTML = iconSpec.svg;
+            });
+            showcase.querySelector('.home-showcase-title').textContent = iconSpec.title;
+            showcase.querySelector('.home-showcase-desc').textContent = iconSpec.desc;
+
+            // 季節・イベント（候補1）の場合はショートカット右下透かしSVGと上部ギャラリーの選択状態も更新
+            if (cand.id === 'seasonal') {
+                var motif = SEASON_MOTIFS[subKey] || SEASON_MOTIFS.christmas;
+                stage.querySelectorAll('.sc-deco').forEach(function (el) {
+                    el.innerHTML = motif.big;
+                });
+                if (subKey.indexOf('christmas') === 0) {
+                    if (xmasGradWrap) xmasGradWrap.style.display = 'block';
+                    var defaultGrad = DEFAULT_XMAS_GRAD_BY_SUB[subKey] || 'red_green';
+                    applyXmasGradient(defaultGrad);
+                } else {
+                    if (xmasGradWrap) xmasGradWrap.style.display = 'none';
+                    stage.removeAttribute('data-xmas-grad');
+                    showcase.removeAttribute('data-xmas-grad');
+                }
+                syncGallerySelection(subKey);
+            }
+        }
+
+        if (cand.id === 'seasonal') {
+            seasonalSetter = applyCandidateSubTheme;
+        }
+
+        cand.subs.forEach(function (sub, idx) {
+            var b = document.createElement('button');
+            b.type = 'button';
+            b.textContent = sub.label;
+            b.setAttribute('data-key', sub.key);
+            b.setAttribute('aria-pressed', idx === 0 ? 'true' : 'false');
+            b.onclick = function () {
+                applyCandidateSubTheme(sub.key);
+            };
+            seg.appendChild(b);
+        });
+
+        picker.appendChild(seg);
+        if (xmasGradWrap) {
+            picker.appendChild(xmasGradWrap);
+        }
+        card.appendChild(picker);
+        card.appendChild(showcase);
+        card.appendChild(stage);
+
+        // 初期サブテーマ適用
+        applyCandidateSubTheme(defaultSub);
+
+        setupInteractions(stage, showcase, seg);
+
+        // 良い点・注意点
+        var dl = document.createElement('dl');
+        dl.className = 'cand-points';
+        dl.innerHTML =
+            '<dt class="good">◎ 特徴・強み</dt><dd>' + cand.good + '</dd>' +
+            '<dt class="note">💡 ポイント</dt><dd>' + cand.note + '</dd>';
+        card.appendChild(dl);
+
+        gridEl.appendChild(card);
+    });
+
+    // =========================================================================
+    // 3. 上部の「年間シーズナル＆イベント ホームボタン一覧ギャラリー（全13種）」を生成
+    // =========================================================================
+    var galleryOrder = [
+        'newyear', 'winter', 'hinamatsuri', 'spring', 'tanabata',
+        'summer', 'fireworks', 'obon', 'autumn', 'halloween',
+        'christmas', 'christmas_sleigh', 'christmas_present'
+    ];
+    var galleryEl = document.getElementById('seasonal-gallery');
+    galleryOrder.forEach(function (key) {
+        var spec = HOME_ICONS['seasonal_' + key];
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'sg-item';
+        btn.setAttribute('data-season-key', key);
+        btn.setAttribute('aria-pressed', key === 'christmas' ? 'true' : 'false');
+        var xmasGradAttr = DEFAULT_XMAS_GRAD_BY_SUB[key] ? ' data-xmas-grad="' + DEFAULT_XMAS_GRAD_BY_SUB[key] + '"' : '';
+        btn.innerHTML =
+            '<span class="sg-month">' + spec.month + '</span>' +
+            '<div class="sg-fab-wrap style-seasonal" data-sub="' + key + '"' + xmasGradAttr + '>' +
+                '<span class="btn-home">' +
+                    '<span class="home-icon-wrap">' + spec.svg + '</span>' +
+                '</span>' +
+            '</div>' +
+            '<span class="sg-name">' + spec.shortName + '</span>';
+        btn.onclick = function () {
+            if (seasonalSetter) {
+                seasonalSetter(key);
+            }
+            var seasonalCard = document.getElementById('card-seasonal');
+            if (seasonalCard) {
+                seasonalCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        };
+        galleryEl.appendChild(btn);
+    });
+
+    function syncGallerySelection(activeKey) {
+        var items = document.querySelectorAll('#seasonal-gallery .sg-item');
+        items.forEach(function (item) {
+            item.setAttribute('aria-pressed', item.getAttribute('data-season-key') === activeKey ? 'true' : 'false');
+        });
+    }
+
+    function getHomeIconSpec(candId, subKey) {
+        if (candId === 'seasonal') {
+            return HOME_ICONS['seasonal_' + subKey] || HOME_ICONS.seasonal_christmas;
+        }
+        return HOME_ICONS[candId] || HOME_ICONS.current;
+    }
+
+    function createShortcutButton(item) {
+        var a = document.createElement('a');
+        a.className = 'btn-shortcut tap-target';
+        a.href = '#app';
+        a.setAttribute('data-nav', item.label);
+        a.innerHTML =
+            '<span class="sc-icon" aria-hidden="true">' + item.icon + '</span>' +
+            '<span class="sc-label">' + item.label + '</span>' +
+            '<span class="sc-deco" aria-hidden="true"></span>';
+        return a;
+    }
+
+    // タップ演出＆トースト動作確認
+    function setupInteractions(stage, showcase, subSeg) {
+        var toast = stage.querySelector('.toast');
+
+        function showToast(msg) {
+            if (!toast) return;
+            toast.textContent = msg;
+            toast.classList.add('show');
+            clearTimeout(toast._t);
+            toast._t = setTimeout(function () {
+                toast.classList.remove('show');
+            }, 1400);
+        }
+
+        var targets = Array.prototype.slice.call(stage.querySelectorAll('.tap-target'))
+            .concat(Array.prototype.slice.call(showcase.querySelectorAll('.tap-target')));
+
+        targets.forEach(function (el) {
+            el.addEventListener('pointerdown', function (e) {
+                if (e.button !== 0) return;
+                var r = el.getBoundingClientRect();
+                var px = e.clientX - r.left;
+                var py = e.clientY - r.top;
+                var d = 2 * Math.hypot(Math.max(px, r.width - px), Math.max(py, r.height - py));
+                el.style.setProperty('--rx', px + 'px');
+                el.style.setProperty('--ry', py + 'px');
+                el.style.setProperty('--rd', d + 'px');
+                el.classList.add('is-pressed');
+            });
+            function clearPress() {
+                setTimeout(function () { el.classList.remove('is-pressed'); }, 120);
+            }
+            el.addEventListener('pointerup', clearPress);
+            el.addEventListener('pointerleave', clearPress);
+            el.addEventListener('pointercancel', clearPress);
+
+            el.addEventListener('click', function (e) {
+                e.preventDefault();
+                if (el.classList.contains('is-navigating')) return;
+                el.classList.add('is-navigating');
+                var targetName = el.getAttribute('data-nav') || 'リンク先';
+                setTimeout(function () {
+                    el.classList.remove('is-navigating');
+                    showToast('「' + targetName + '」へ遷移しました（模擬）');
+                }, 700);
+            });
+        });
+
+        stage.querySelectorAll('.btn-config').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var act = btn.getAttribute('data-action');
+                if (act === 'palette' && subSeg) {
+                    var buttons = Array.prototype.slice.call(subSeg.children);
+                    var curIdx = buttons.findIndex(function (b) { return b.getAttribute('aria-pressed') === 'true'; });
+                    var nextBtn = buttons[(curIdx + 1) % buttons.length];
+                    if (nextBtn) nextBtn.click();
+                    showToast('🎨 「' + nextBtn.textContent + '」に切り替えました');
+                } else {
+                    showToast('⚙️ ショートカット編集モーダルを開きます');
+                }
+            });
+        });
+    }
+
+    // 上部コントロールのイベント設定
+    var pageEl = document.getElementById('page');
+
+    // レイアウト切替
+    var layoutBtns = document.querySelectorAll('#ctl-layout button');
+    layoutBtns.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            layoutBtns.forEach(function (b) { b.setAttribute('aria-pressed', b === btn ? 'true' : 'false'); });
+            var val = btn.getAttribute('data-val');
+            pageEl.setAttribute('data-layout', val);
+            if (val === 'focus') {
+                setDeviceMode('both');
+            }
+        });
+    });
+
+    // デバイス切替
+    var deviceBtns = document.querySelectorAll('#ctl-device button');
+    function setDeviceMode(val) {
+        pageEl.setAttribute('data-device', val);
+        deviceBtns.forEach(function (b) {
+            b.setAttribute('aria-pressed', b.getAttribute('data-val') === val ? 'true' : 'false');
+        });
+    }
+    deviceBtns.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            setDeviceMode(btn.getAttribute('data-val'));
+        });
+    });
+
+    // 形（カプセル / 角丸）切替
+    var shapeBtns = document.querySelectorAll('#ctl-shape button');
+    shapeBtns.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            shapeBtns.forEach(function (b) { b.setAttribute('aria-pressed', b === btn ? 'true' : 'false'); });
+            document.documentElement.style.setProperty('--sc-radius', btn.getAttribute('data-sc'));
+            document.documentElement.style.setProperty('--home-radius', btn.getAttribute('data-home'));
+        });
+    });
+
+    // アイコン表示切替
+    var iconCheck = document.getElementById('ctl-icons');
+    iconCheck.addEventListener('change', function () {
+        pageEl.setAttribute('data-icons', iconCheck.checked ? 'on' : 'off');
+    });
+
+    // 下部の「🎨 デザイン設定モーダル組み込みイメージ」のカード生成
+    var simCardsEl = document.getElementById('sim-cards');
+    CANDIDATES.forEach(function (cand, idx) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'style-card-btn';
+        btn.setAttribute('aria-pressed', idx === 1 ? 'true' : 'false');
+        btn.innerHTML =
+            '<span class="scb-title">' + cand.no + '：' + cand.title.replace(/（.*）/, '') + '</span>' +
+            '<span class="scb-desc">' + cand.tag + '</span>';
+        btn.onclick = function () {
+            Array.prototype.forEach.call(simCardsEl.children, function (c) {
+                c.setAttribute('aria-pressed', c === btn ? 'true' : 'false');
+            });
+            var targetCard = document.getElementById('card-' + cand.id);
+            if (targetCard) {
+                targetCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        };
+        simCardsEl.appendChild(btn);
+    });
+})();
+</script>
+</body>
+</html>
