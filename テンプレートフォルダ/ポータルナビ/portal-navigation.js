@@ -1494,12 +1494,18 @@
             '.pna-seg button{border:none;background:none;padding:7px 14px;border-radius:7px;font-size:12px;color:#5f6b76;cursor:pointer;}' +
             '.pna-seg button.on{background:#2c3440;color:#fff;}' +
             '.pna-design-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}' +
+            '.pna-preview-grid{display:grid;grid-template-columns:1fr auto;gap:16px;align-items:center;}' +
+            '.pna-design-cell{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0;}' +
+            '.pna-design-cell-title{font-size:11px;color:#8b95a1;}' +
+            '.pna-design-cell .pna-mini-phone{margin:0;}' +
+            '.pna-design-cell .psm-preview-box{justify-content:center;max-width:100%;overflow:hidden;align-content:flex-start;align-items:flex-start;}' +
+            '.pna-preview-one{max-width:220px;min-width:90px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
             '.pna-mini-phone{width:120px;height:150px;border:5px solid #1d232a;border-radius:16px;position:relative;background:#f4f6f8;margin:6px auto 0;}' +
             '.pna-mini-fab{position:absolute;bottom:10px;left:calc(50% - 20px);width:40px;height:40px;display:flex;align-items:center;justify-content:center;}' +
             '.pna-mini-fab svg{width:20px;height:20px;}' +
             '.psm-dialog.pna-design-dialog{width:520px;}' +
             '.pna-design-hint{font-size:12px;color:#6b7684;margin:8px 0 0 0;}' +
-            '@media (max-width:640px){.pna-design-grid{grid-template-columns:1fr;}}' +
+            '@media (max-width:640px){.pna-design-grid{grid-template-columns:1fr;}.pna-preview-grid{grid-template-columns:1fr;justify-items:center;}}' +
             '@media (max-width:600px){' +
             '.psm-dialog.pna-design-dialog{width:100%;max-width:100%;height:100%;max-height:100%;border-radius:0;}' +
             '.pna-swatches{gap:8px;}' +
@@ -1543,14 +1549,13 @@
         if (topGap) l.style.marginTop = '12px';
         return l;
     }
-    /** ショートカットボタンのプレビュー（先頭3件のラベル）。 */
+    /** ショートカットボタンのプレビュー（先頭1件のラベルだけを1ボタンで表示。空なら「ショートカット」）。 */
     function buildShortcutPreview(labels, theme, shape) {
         var box = adminEl('div', 'psm-preview-box');
-        labels.slice(0, 3).forEach(function (text) {
-            var b = adminEl('div', 'psm-preview-btn', text);
-            applyPreviewBtn(b, theme, shape);
-            box.appendChild(b);
-        });
+        var text = (labels && labels[0]) || 'ショートカット';
+        var b = adminEl('div', 'psm-preview-btn pna-preview-one', text);
+        applyPreviewBtn(b, theme, shape);
+        box.appendChild(b);
         return box;
     }
     /** ホームボタン（モバイル）のプレビュー。 */
@@ -2493,9 +2498,14 @@
             card.appendChild(fieldLabel('形', true));
             card.appendChild(segGroup(SHAPES, draft.scShape, function (n) { draft.scShape = n; render(); }));
             card.appendChild(fieldLabel('プレビュー', true));
-            var grid = adminEl('div', 'pna-design-grid');
-            grid.appendChild(buildShortcutPreview(labels, theme, shape));
-            grid.appendChild(buildHomePreview(theme, homeShapeNameForScShape(draft.scShape)));
+            var grid = adminEl('div', 'pna-preview-grid');
+            var cellSc = adminEl('div', 'pna-design-cell');
+            cellSc.appendChild(adminEl('div', 'pna-design-cell-title', 'ショートカット'));
+            cellSc.appendChild(buildShortcutPreview(labels, theme, shape));
+            var cellHome = adminEl('div', 'pna-design-cell');
+            cellHome.appendChild(adminEl('div', 'pna-design-cell-title', 'ホームボタン（モバイル）'));
+            cellHome.appendChild(buildHomePreview(theme, homeShapeNameForScShape(draft.scShape)));
+            grid.appendChild(cellSc); grid.appendChild(cellHome);
             card.appendChild(grid);
             card.appendChild(adminEl('p', 'pna-design-hint', 'ホームボタン（モバイル）はショートカットと同じ色・形になります。'));
             m.body.appendChild(card);
@@ -3956,6 +3966,7 @@
             clearPersonalDesign: clearPersonalDesign,
             readPersonalDesign: readPersonalDesign,
             homeShapeNameForScShape: homeShapeNameForScShape,
+            buildShortcutPreview: buildShortcutPreview,
             withDerivedHome: withDerivedHome,
             openDesignSettingsModal: openDesignSettingsModal,
             checkAdminRights: checkAdminRights,
