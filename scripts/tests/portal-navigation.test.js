@@ -787,6 +787,13 @@ describe('17d. buildShortcutPreview', () => {
         assert.equal(box.children.length, 1);
         assert.equal(box.children[0].textContent, 'ショートカット');
     });
+    test('labels が undefined でも「ショートカット」を1ボタンで表示する', () => {
+        const { ctx, api } = loadModule({ pathname: '/k/' });
+        stubDoc(ctx);
+        const box = api.buildShortcutPreview(undefined, api.constants.THEMES[0], api.constants.SHAPES[0]);
+        assert.equal(box.children.length, 1);
+        assert.equal(box.children[0].textContent, 'ショートカット');
+    });
 });
 
 describe('18. checkAdminRights', () => {
